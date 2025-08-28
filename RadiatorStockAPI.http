@@ -1,0 +1,6 @@
+@RadiatorStockAPI_HostAddress = http://localhost:5128
+
+GET {{RadiatorStockAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

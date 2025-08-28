@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "JxUesPT5pKq4lmfiZtsqRDWPQU5KxgAZQR8zUbKYCuM=",
+  "Source": "RadiatorStockAPI",
+  "BasePath": "_content/RadiatorStockAPI",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}
