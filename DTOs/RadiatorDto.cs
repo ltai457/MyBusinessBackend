@@ -1,3 +1,4 @@
+// DTOs/RadiatorDto.cs - Updated CreateRadiatorDto
 using System.ComponentModel.DataAnnotations;
 
 namespace RadiatorStockAPI.DTOs
@@ -18,8 +19,12 @@ namespace RadiatorStockAPI.DTOs
         
         [Range(1900, 2030)]
         public int Year { get; set; }
+        
+        // NEW: Initial stock levels for each warehouse
+        public Dictionary<string, int>? InitialStock { get; set; } = new();
     }
     
+    // Keep existing DTOs unchanged
     public class UpdateRadiatorDto
     {
         [Required]

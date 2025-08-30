@@ -1,4 +1,4 @@
-// Services/RadiatorService.cs
+// Services/RadiatorService.cs - Updated CreateRadiatorAsync method
 using Microsoft.EntityFrameworkCore;
 using RadiatorStockAPI.Data;
 using RadiatorStockAPI.DTOs;
@@ -38,16 +38,25 @@ namespace RadiatorStockAPI.Services
 
             _context.Radiators.Add(radiator);
 
-            // Initialize stock levels for all warehouses
+            // Get all warehouses
             var warehouses = await _context.Warehouses.ToListAsync();
+            
+            // Initialize stock levels for all warehouses
             foreach (var warehouse in warehouses)
             {
+                // Use initial stock from DTO if provided, otherwise default to 0
+                var initialQuantity = 0;
+                if (dto.InitialStock != null && dto.InitialStock.ContainsKey(warehouse.Code))
+                {
+                    initialQuantity = Math.Max(0, dto.InitialStock[warehouse.Code]); // Ensure non-negative
+                }
+
                 var stockLevel = new StockLevel
                 {
                     Id = Guid.NewGuid(),
                     RadiatorId = radiator.Id,
                     WarehouseId = warehouse.Id,
-                    Quantity = 0,
+                    Quantity = initialQuantity,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
@@ -72,6 +81,7 @@ namespace RadiatorStockAPI.Services
             };
         }
 
+        // Keep all other methods unchanged...
         public async Task<IEnumerable<RadiatorListDto>> GetAllRadiatorsAsync()
         {
             var radiators = await _context.Radiators
