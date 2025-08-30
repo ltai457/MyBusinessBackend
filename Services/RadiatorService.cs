@@ -1,4 +1,4 @@
-// Services/RadiatorService.cs - Updated CreateRadiatorAsync method
+// Services/RadiatorService.cs
 using Microsoft.EntityFrameworkCore;
 using RadiatorStockAPI.Data;
 using RadiatorStockAPI.DTOs;
@@ -10,20 +10,73 @@ namespace RadiatorStockAPI.Services
     {
         private readonly RadiatorDbContext _context;
         private readonly IStockService _stockService;
+        private readonly IWarehouseService _warehouseService;
 
-        public RadiatorService(RadiatorDbContext context, IStockService stockService)
+        public RadiatorService(
+            RadiatorDbContext context,
+            IStockService stockService,
+            IWarehouseService warehouseService)
         {
             _context = context;
             _stockService = stockService;
+            _warehouseService = warehouseService;
         }
 
+        // -----------------------------
+        // Helpers (pure mapping)
+        // -----------------------------
+        private static Dictionary<string, int> BuildStockDictInMemory(IEnumerable<StockLevel> stockLevels)
+        {
+            // Group/sum just in case duplicates exist, and ignore null warehouses defensively
+            return stockLevels
+                .Where(sl => sl.Warehouse != null && !string.IsNullOrWhiteSpace(sl.Warehouse.Code))
+                .GroupBy(sl => sl.Warehouse.Code!)
+                .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
+        }
+
+        private static RadiatorListDto ToListDto(Radiator r)
+        {
+            return new RadiatorListDto
+            {
+                Id = r.Id,
+                Brand = r.Brand,
+                Code = r.Code,
+                Name = r.Name,
+                Year = r.Year,
+                RetailPrice = r.RetailPrice,
+                TradePrice = r.TradePrice,
+                Stock = BuildStockDictInMemory(r.StockLevels)
+            };
+        }
+
+        private static RadiatorResponseDto ToResponseDto(Radiator r)
+        {
+            return new RadiatorResponseDto
+            {
+                Id = r.Id,
+                Brand = r.Brand,
+                Code = r.Code,
+                Name = r.Name,
+                Year = r.Year,
+                RetailPrice = r.RetailPrice,
+                TradePrice = r.TradePrice,
+                CostPrice = r.CostPrice,
+                IsPriceOverridable = r.IsPriceOverridable,
+                MaxDiscountPercent = r.MaxDiscountPercent,
+                Stock = BuildStockDictInMemory(r.StockLevels)
+            };
+        }
+
+        // -----------------------------
+        // CRUD
+        // -----------------------------
         public async Task<RadiatorResponseDto?> CreateRadiatorAsync(CreateRadiatorDto dto)
         {
-            // Check if code already exists
+            // prevent duplicate code
             if (await CodeExistsAsync(dto.Code))
-            {
-                return null; // Code already exists
-            }
+                return null;
+
+            var now = DateTime.UtcNow;
 
             var radiator = new Radiator
             {
@@ -32,156 +85,193 @@ namespace RadiatorStockAPI.Services
                 Code = dto.Code,
                 Name = dto.Name,
                 Year = dto.Year,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+
+                RetailPrice = dto.RetailPrice,
+                TradePrice  = dto.TradePrice,
+                CostPrice   = dto.CostPrice,
+
+                IsPriceOverridable = dto.IsPriceOverridable,
+                MaxDiscountPercent = dto.MaxDiscountPercent,
+
+                CreatedAt = now,
+                UpdatedAt = now
             };
 
             _context.Radiators.Add(radiator);
 
-            // Get all warehouses
-            var warehouses = await _context.Warehouses.ToListAsync();
-            
-            // Initialize stock levels for all warehouses
-            foreach (var warehouse in warehouses)
+            // Initialize stock for all warehouses as 0 (or change if you want different behavior)
+            var warehouses = await _warehouseService.GetAllWarehousesAsync();
+            foreach (var wh in warehouses)
             {
-                // Use initial stock from DTO if provided, otherwise default to 0
-                var initialQuantity = 0;
-                if (dto.InitialStock != null && dto.InitialStock.ContainsKey(warehouse.Code))
+                _context.StockLevels.Add(new StockLevel
                 {
-                    initialQuantity = Math.Max(0, dto.InitialStock[warehouse.Code]); // Ensure non-negative
-                }
-
-                var stockLevel = new StockLevel
-                {
-                    Id = Guid.NewGuid(),
-                    RadiatorId = radiator.Id,
-                    WarehouseId = warehouse.Id,
-                    Quantity = initialQuantity,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                _context.StockLevels.Add(stockLevel);
+                    Id          = Guid.NewGuid(),
+                    RadiatorId  = radiator.Id,
+                    WarehouseId = wh.Id,
+                    Quantity    = 0,
+                    CreatedAt   = now,
+                    UpdatedAt   = now
+                });
             }
 
             await _context.SaveChangesAsync();
 
-            // Get stock dictionary for response
-            var stock = await _stockService.GetStockDictionaryAsync(radiator.Id);
+            // Load with stock + warehouses, then map
+            var created = await _context.Radiators
+                .AsNoTracking()
+                .Include(r => r.StockLevels).ThenInclude(sl => sl.Warehouse)
+                .FirstAsync(r => r.Id == radiator.Id);
 
-            return new RadiatorResponseDto
-            {
-                Id = radiator.Id,
-                Brand = radiator.Brand,
-                Code = radiator.Code,
-                Name = radiator.Name,
-                Year = radiator.Year,
-                CreatedAt = radiator.CreatedAt,
-                UpdatedAt = radiator.UpdatedAt,
-                Stock = stock
-            };
+            return ToResponseDto(created);
         }
 
-        // Keep all other methods unchanged...
-        public async Task<IEnumerable<RadiatorListDto>> GetAllRadiatorsAsync()
+        public async Task<List<RadiatorListDto>> GetAllRadiatorsAsync()
         {
-            var radiators = await _context.Radiators
+            // 1) Run the SQL and materialize first
+            var entities = await _context.Radiators
+                .AsNoTracking()
                 .Include(r => r.StockLevels)
-                    .ThenInclude(sl => sl.Warehouse)
+                .ThenInclude(sl => sl.Warehouse)
                 .OrderBy(r => r.Brand)
                 .ThenBy(r => r.Name)
                 .ToListAsync();
 
-            var result = new List<RadiatorListDto>();
-            
-            foreach (var radiator in radiators)
+            // 2) Build the dictionary on the client (C#)
+            var list = entities.Select(r => new RadiatorListDto
             {
-                var stock = radiator.StockLevels.ToDictionary(
-                    sl => sl.Warehouse.Code,
-                    sl => sl.Quantity
-                );
+                Id = r.Id,
+                Brand = r.Brand,
+                Code = r.Code,
+                Name = r.Name,
+                Year = r.Year,
 
-                result.Add(new RadiatorListDto
-                {
-                    Id = radiator.Id,
-                    Brand = radiator.Brand,
-                    Code = radiator.Code,
-                    Name = radiator.Name,
-                    Year = radiator.Year,
-                    Stock = stock
-                });
-            }
+                RetailPrice        = r.RetailPrice,
+                TradePrice         = r.TradePrice,
+                IsPriceOverridable = r.IsPriceOverridable,
+                MaxDiscountPercent = r.MaxDiscountPercent,
 
-            return result;
+                // Safe & robust: ignore null warehouses and combine duplicate codes
+                Stock = r.StockLevels
+                    .Where(sl => sl.Warehouse != null && !string.IsNullOrWhiteSpace(sl.Warehouse.Code))
+                    .GroupBy(sl => sl.Warehouse.Code)
+                    .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity))
+            }).ToList();
+
+            return list;
         }
 
         public async Task<RadiatorResponseDto?> GetRadiatorByIdAsync(Guid id)
         {
-            var radiator = await _context.Radiators
-                .Include(r => r.StockLevels)
-                    .ThenInclude(sl => sl.Warehouse)
+            var entity = await _context.Radiators
+                .AsNoTracking()
+                .Include(r => r.StockLevels).ThenInclude(sl => sl.Warehouse)
                 .FirstOrDefaultAsync(r => r.Id == id);
 
-            if (radiator == null)
-                return null;
-
-            var stock = radiator.StockLevels.ToDictionary(
-                sl => sl.Warehouse.Code,
-                sl => sl.Quantity
-            );
-
-            return new RadiatorResponseDto
-            {
-                Id = radiator.Id,
-                Brand = radiator.Brand,
-                Code = radiator.Code,
-                Name = radiator.Name,
-                Year = radiator.Year,
-                CreatedAt = radiator.CreatedAt,
-                UpdatedAt = radiator.UpdatedAt,
-                Stock = stock
-            };
+            return entity is null ? null : ToResponseDto(entity);
         }
 
         public async Task<RadiatorResponseDto?> UpdateRadiatorAsync(Guid id, UpdateRadiatorDto dto)
         {
-            var radiator = await _context.Radiators.FindAsync(id);
-            if (radiator == null)
-                return null;
+            var entity = await _context.Radiators
+                .Include(r => r.StockLevels).ThenInclude(sl => sl.Warehouse)
+                .FirstOrDefaultAsync(r => r.Id == id);
 
-            radiator.Brand = dto.Brand;
-            radiator.Name = dto.Name;
-            radiator.Year = dto.Year;
-            radiator.UpdatedAt = DateTime.UtcNow;
+            if (entity is null) return null;
+
+            // If code changes, enforce uniqueness (excluding current id)
+            if (!string.IsNullOrWhiteSpace(dto.Code) &&
+                !dto.Code.Equals(entity.Code, StringComparison.OrdinalIgnoreCase) &&
+                await CodeExistsAsync(dto.Code, excludeId: id))
+            {
+                return null; // caller can translate this to 409 Conflict
+            }
+
+            // Apply updates
+            entity.Brand = dto.Brand ?? entity.Brand;
+            entity.Code  = dto.Code  ?? entity.Code;
+            entity.Name  = dto.Name  ?? entity.Name;
+            if (dto.Year.HasValue) entity.Year = dto.Year.Value;
+
+            if (dto.RetailPrice.HasValue) entity.RetailPrice = dto.RetailPrice.Value;
+            if (dto.TradePrice.HasValue)  entity.TradePrice  = dto.TradePrice.Value;
+            if (dto.CostPrice.HasValue)   entity.CostPrice   = dto.CostPrice.Value;
+
+            if (dto.IsPriceOverridable.HasValue) entity.IsPriceOverridable = dto.IsPriceOverridable.Value;
+            if (dto.MaxDiscountPercent.HasValue) entity.MaxDiscountPercent = dto.MaxDiscountPercent.Value;
+
+            entity.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
-            // Get updated radiator with stock
-            return await GetRadiatorByIdAsync(id);
+            // Project fresh snapshot
+            var updated = await _context.Radiators
+                .AsNoTracking()
+                .Include(r => r.StockLevels).ThenInclude(sl => sl.Warehouse)
+                .FirstAsync(r => r.Id == entity.Id);
+
+            return ToResponseDto(updated);
         }
 
         public async Task<bool> DeleteRadiatorAsync(Guid id)
         {
-            var radiator = await _context.Radiators.FindAsync(id);
-            if (radiator == null)
-                return false;
+            var entity = await _context.Radiators.FirstOrDefaultAsync(r => r.Id == id);
+            if (entity is null) return false;
 
-            _context.Radiators.Remove(radiator);
+            _context.Radiators.Remove(entity);
             await _context.SaveChangesAsync();
             return true;
         }
 
-        public async Task<bool> RadiatorExistsAsync(Guid id)
-        {
-            return await _context.Radiators.AnyAsync(r => r.Id == id);
-        }
+        // -----------------------------
+        // Existence / Uniqueness
+        // -----------------------------
+        public Task<bool> RadiatorExistsAsync(Guid id)
+            => _context.Radiators.AsNoTracking().AnyAsync(r => r.Id == id);
 
         public async Task<bool> CodeExistsAsync(string code, Guid? excludeId = null)
         {
-            var query = _context.Radiators.Where(r => r.Code == code);
-            if (excludeId.HasValue)
-                query = query.Where(r => r.Id != excludeId.Value);
-                
+            var query = _context.Radiators.AsNoTracking().Where(r => r.Code == code);
+            if (excludeId.HasValue) query = query.Where(r => r.Id != excludeId.Value);
             return await query.AnyAsync();
+        }
+
+        // -----------------------------
+        // Bulk price updates
+        // -----------------------------
+        public async Task<List<RadiatorListDto>> UpdateMultiplePricesAsync(List<UpdateRadiatorPriceDto> updates)
+        {
+            if (updates == null || updates.Count == 0)
+                return new List<RadiatorListDto>();
+
+            var ids = updates.Select(u => u.Id).Distinct().ToList();
+            var now = DateTime.UtcNow;
+
+            var entities = await _context.Radiators
+                .Include(r => r.StockLevels).ThenInclude(sl => sl.Warehouse)
+                .Where(r => ids.Contains(r.Id))
+                .ToListAsync();
+
+            // apply changes
+            foreach (var r in entities)
+            {
+                var change = updates.FirstOrDefault(u => u.Id == r.Id);
+                if (change == null) continue;
+
+                if (change.RetailPrice.HasValue) r.RetailPrice = change.RetailPrice.Value;
+                if (change.TradePrice.HasValue)  r.TradePrice  = change.TradePrice.Value;
+                if (change.CostPrice.HasValue)   r.CostPrice   = change.CostPrice.Value;
+
+                r.UpdatedAt = now;
+            }
+
+            await _context.SaveChangesAsync();
+
+            // Map in memory (NO ToDictionary inside EF query)
+            // If you want to re-load to ensure no stale navigation: do another Include + ToListAsync() here.
+            return entities
+                .OrderBy(r => r.Brand).ThenBy(r => r.Name)
+                .Select(ToListDto)
+                .ToList();
         }
     }
 }
