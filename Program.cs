@@ -1,4 +1,3 @@
-// Program.cs - Add CORS configuration
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -22,12 +21,25 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<ISalesService, SalesService>();
 
-// Add CORS
+// Add CORS with environment-specific configuration
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:3000") // React dev server
+        var allowedOrigins = new List<string> 
+        { 
+            "http://localhost:5173", 
+            "http://localhost:3000" 
+        };
+        
+        // Add production URLs
+        if (builder.Environment.IsProduction())
+        {
+            allowedOrigins.Add("http://radiator-api-prod.eba-fsuk46hv.us-east-1.elasticbeanstalk.com");
+            allowedOrigins.Add("https://radiator-api-prod.eba-fsuk46hv.us-east-1.elasticbeanstalk.com");
+        }
+        
+        policy.WithOrigins(allowedOrigins.ToArray())
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -78,7 +90,6 @@ builder.Services.AddSwaggerGen(c =>
         Description = "API for managing car radiator stock across warehouses with JWT authentication"
     });
 
-    // Use HTTP Bearer, not ApiKey
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -101,21 +112,26 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
+app.UseSwagger();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Radiator Stock API v1");
+    // Don't override the default route prefix in production to avoid conflicts
+    if (app.Environment.IsDevelopment())
+    {
+        c.RoutePrefix = string.Empty; // Serve Swagger UI at root only in development
+    }
+});
+
+// Only use HTTPS redirection in development
+// AWS Elastic Beanstalk handles HTTPS at the load balancer level
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Radiator Stock API v1");
-        c.RoutePrefix = string.Empty;
-    });
+    app.UseHttpsRedirection();
 }
-
-app.UseHttpsRedirection();
 
 // Use CORS - IMPORTANT: This must be before Authentication and Authorization
 app.UseCors("AllowFrontend");
@@ -124,6 +140,24 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Add root endpoint that provides API information
+app.MapGet("/", () => Results.Ok(new 
+{
+    service = "RadiatorStock API",
+    version = "v1",
+    status = "running",
+    timestamp = DateTime.UtcNow,
+    environment = app.Environment.EnvironmentName,
+    swagger = "/swagger"
+}));
+
+// Add health check endpoint for AWS ELB
+app.MapGet("/health", () => Results.Ok(new 
+{
+    status = "healthy",
+    timestamp = DateTime.UtcNow
+}));
 
 // Ensure database is created and seeded
 using (var scope = app.Services.CreateScope())
@@ -142,4 +176,4 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-app.Run();
+app.Run();// Build Tue Sep  2 05:37:09 NZST 2025

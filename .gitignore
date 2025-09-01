@@ -342,3 +342,7 @@ appsettings.*.json
 
 # Entity Framework
 Migrations/
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
