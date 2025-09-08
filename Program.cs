@@ -41,118 +41,97 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<RadiatorDbContext>("database")
     .AddCheck("api", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("API is running"));
 
-// Add CORS with environment-specific configuration
+// Add CORS with enhanced configuration for network access
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        var allowedOrigins = new List<string> 
-        { 
-            "http://localhost:5173", 
-            "http://localhost:3000",
-            "http://localhost:4200"  // Angular dev server
-        };
-        
-        // Add production URLs
-        if (builder.Environment.IsProduction())
+        if (builder.Environment.IsDevelopment())
         {
-            // Add your production frontend URLs here
-            var prodOrigins = Environment.GetEnvironmentVariable("ALLOWED_ORIGINS")?.Split(',') ?? Array.Empty<string>();
-            allowedOrigins.AddRange(prodOrigins);
-            
-            // Add Elastic Beanstalk URLs if using AWS
-            allowedOrigins.Add("http://radiator-api-prod.eba-fsuk46hv.us-east-1.elasticbeanstalk.com");
-            allowedOrigins.Add("https://radiator-api-prod.eba-fsuk46hv.us-east-1.elasticbeanstalk.com");
+            // In development, allow any origin for easier testing
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
         }
-        
-        policy.WithOrigins(allowedOrigins.ToArray())
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+        else
+        {
+            // In production, use specific origins
+            var allowedOrigins = new List<string>();
+            
+            // Add production URLs from environment variables
+            var prodOrigins = Environment.GetEnvironmentVariable("ALLOWED_ORIGINS")?.Split(',') 
+                ?? Array.Empty<string>();
+            allowedOrigins.AddRange(prodOrigins.Where(o => !string.IsNullOrWhiteSpace(o)));
+            
+            policy.WithOrigins(allowedOrigins.ToArray())
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .AllowCredentials();
+        }
     });
 });
 
-// Add JWT Authentication with environment variable support
-var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? 
-                builder.Configuration["JWT:Secret"] ?? 
-                throw new InvalidOperationException("JWT Secret not configured");
-var jwtIssuer = builder.Configuration["JWT:Issuer"] ?? "RadiatorStockAPI";
-var jwtAudience = builder.Configuration["JWT:Audience"] ?? "RadiatorStockAPI-Users";
+// Add authentication
+var jwtSettings = builder.Configuration.GetSection("JWT");
+var secretKey = jwtSettings["Secret"];
 
-builder.Services.AddAuthentication(options =>
+if (string.IsNullOrEmpty(secretKey))
 {
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
+    throw new InvalidOperationException("JWT Secret is not configured");
+}
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
     {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtIssuer,
-        ValidAudience = jwtAudience,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
-        ClockSkew = TimeSpan.Zero
-    };
-});
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSettings["Issuer"],
+            ValidAudience = jwtSettings["Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+            ClockSkew = TimeSpan.Zero
+        };
+    });
 
 builder.Services.AddAuthorization();
 
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
-        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
-    });
-
-// Add logging configuration
-builder.Services.AddLogging(loggingBuilder =>
-{
-    loggingBuilder.AddConsole();
-    
-    // Add AWS CloudWatch logging in production
-    if (builder.Environment.IsProduction())
-    {
-        // Add AWS logging provider if needed
-        // loggingBuilder.AddAWSProvider();
-    }
-});
-
+// Add controllers and API explorer
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+
+// Add Swagger with JWT support
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "Radiator Stock API",
-        Version = "v1.0",
-        Description = "API for managing car radiator stock across warehouses with JWT authentication",
-        Contact = new OpenApiContact
-        {
-            Name = "RadiatorStock NZ",
-            Email = "support@radiatorstock.co.nz"
-        }
+    c.SwaggerDoc("v1", new OpenApiInfo 
+    { 
+        Title = "RadiatorStock API", 
+        Version = "v1",
+        Description = "API for managing radiator inventory and sales"
     });
-
+    
+    // Add JWT authentication to Swagger
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
+        Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token in the text input below.",
         Name = "Authorization",
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Enter JWT token only. Example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
     });
-
+    
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
             new OpenApiSecurityScheme
             {
-                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
             },
             Array.Empty<string>()
         }
@@ -162,46 +141,112 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
-app.UseSwagger();
-app.UseSwaggerUI(c =>
-{
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Radiator Stock API v1");
-    c.DocumentTitle = "Radiator Stock API Documentation";
-    
-    // Serve Swagger UI at root only in development
-    if (app.Environment.IsDevelopment())
-    {
-        c.RoutePrefix = string.Empty;
-    }
-});
-
-// Only use HTTPS redirection in development
-// AWS Elastic Beanstalk and other cloud providers handle HTTPS at the load balancer level
 if (app.Environment.IsDevelopment())
 {
-    app.UseHttpsRedirection();
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "RadiatorStock API v1");
+        c.RoutePrefix = "swagger";
+    });
 }
 
-// Use CORS - IMPORTANT: This must be before Authentication and Authorization
+// Security headers
+app.UseSecurityHeaders();
+
+// Enable CORS before authentication - THIS IS CRITICAL
 app.UseCors("AllowFrontend");
 
+// Authentication and authorization
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Map controllers
 app.MapControllers();
 
-// Add root endpoint that provides API information
-app.MapGet("/", () => Results.Ok(new 
+// Enhanced health check endpoint with CORS information
+app.MapGet("/health", async (HttpContext httpContext, RadiatorDbContext context, IWebHostEnvironment env) =>
 {
-    service = "RadiatorStock API",
-    version = "v1.0",
-    status = "running",
-    timestamp = DateTime.UtcNow,
-    environment = app.Environment.EnvironmentName,
-    swagger = app.Environment.IsDevelopment() ? "/" : "/swagger",
-    health = "/health",
-    endpoints = new
+    var dbHealthy = false;
+    var dbError = "";
+    
+    try
     {
+        // Test database connection
+        await context.Database.CanConnectAsync();
+        dbHealthy = true;
+    }
+    catch (Exception ex)
+    {
+        dbError = ex.Message;
+    }
+    
+    var response = new
+    {
+        status = dbHealthy ? "healthy" : "unhealthy",
+        timestamp = DateTime.UtcNow,
+        environment = env.EnvironmentName,
+        api_version = "v1",
+        database_status = dbHealthy ? "connected" : "disconnected",
+        database_error = dbError,
+        cors_policy = env.IsDevelopment() ? "AllowAnyOrigin (Development)" : "Restricted (Production)",
+        checks = new[]
+        {
+            new
+            {
+                name = "database",
+                status = dbHealthy ? "healthy" : "unhealthy",
+                description = dbHealthy ? "Database connection successful" : $"Database connection failed: {dbError}"
+            },
+            new
+            {
+                name = "api",
+                status = "healthy",
+                description = "API is running"
+            },
+            new
+            {
+                name = "cors",
+                status = "healthy", 
+                description = env.IsDevelopment() ? "CORS allows any origin in development" : "CORS configured for production"
+            }
+        }
+    };
+    
+    httpContext.Response.ContentType = "application/json";
+    httpContext.Response.StatusCode = dbHealthy ? 200 : 503;
+    
+    // Add CORS headers manually for health check
+    httpContext.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+    httpContext.Response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    httpContext.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    
+    await httpContext.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(response, new System.Text.Json.JsonSerializerOptions
+    {
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        WriteIndented = true
+    }));
+}).AllowAnonymous();
+
+// Add simple ping endpoint for load balancers
+app.MapGet("/ping", (IWebHostEnvironment env) => Results.Ok(new { 
+    status = "ok", 
+    timestamp = DateTime.UtcNow,
+    server = Environment.MachineName,
+    environment = env.EnvironmentName,
+    cors = env.IsDevelopment() ? "open" : "restricted"
+})).AllowAnonymous();
+
+// Add API info endpoint
+app.MapGet("/api/v1/info", (IWebHostEnvironment env) => Results.Ok(new {
+    name = "RadiatorStock API",
+    version = "1.0.0",
+    environment = env.EnvironmentName,
+    timestamp = DateTime.UtcNow,
+    cors_policy = env.IsDevelopment() ? "Development (Any Origin)" : "Production (Restricted)",
+    endpoints = new {
+        health = "/health",
+        swagger = env.IsDevelopment() ? "/swagger" : null,
         auth = "/api/v1/auth",
         radiators = "/api/v1/radiators",
         warehouses = "/api/v1/warehouses",
@@ -210,70 +255,35 @@ app.MapGet("/", () => Results.Ok(new
     }
 })).AllowAnonymous();
 
-// Add comprehensive health check endpoint for AWS ELB and monitoring
-app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
-{
-    ResponseWriter = async (context, report) =>
-    {
-        // Custom health check that tests database connectivity
-        bool dbHealthy = false;
-        try
-        {
-            using var scope = app.Services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<RadiatorDbContext>();
-            dbHealthy = await dbContext.Database.CanConnectAsync();
-        }
-        catch
-        {
-            dbHealthy = false;
-        }
-
-        var response = new
-        {
-            status = dbHealthy ? "healthy" : "unhealthy",
-            timestamp = DateTime.UtcNow,
-            checks = new[]
-            {
-                new
-                {
-                    name = "database",
-                    status = dbHealthy ? "healthy" : "unhealthy",
-                    description = dbHealthy ? "Database connection successful" : "Database connection failed"
-                },
-                new
-                {
-                    name = "api",
-                    status = "healthy",
-                    description = "API is running"
-                }
-            },
-            environment = app.Environment.EnvironmentName
-        };
-        
-        context.Response.ContentType = "application/json";
-        context.Response.StatusCode = dbHealthy ? 200 : 503;
-        await context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(response, new System.Text.Json.JsonSerializerOptions
-        {
-            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
-        }));
-    }
-}).AllowAnonymous();
-
-// Add simple health check for load balancers
-app.MapGet("/ping", () => Results.Ok(new { status = "ok", timestamp = DateTime.UtcNow })).AllowAnonymous();
-
-// Database migration and seeding
+// Database migration and seeding with enhanced error handling
 try
 {
     using var scope = app.Services.CreateScope();
     var context = scope.ServiceProvider.GetRequiredService<RadiatorDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var env = scope.ServiceProvider.GetRequiredService<IWebHostEnvironment>();
     
     logger.LogInformation("Starting database migration and seeding...");
     
+    // Test connection first
+    var canConnect = await context.Database.CanConnectAsync();
+    if (!canConnect)
+    {
+        throw new InvalidOperationException("Cannot connect to database");
+    }
+    
     // Apply pending migrations
-    await context.Database.MigrateAsync();
-    logger.LogInformation("✅ Database migrations applied successfully");
+    var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
+    if (pendingMigrations.Any())
+    {
+        logger.LogInformation("Applying {Count} pending migrations...", pendingMigrations.Count());
+        await context.Database.MigrateAsync();
+        logger.LogInformation("✅ Database migrations applied successfully");
+    }
+    else
+    {
+        logger.LogInformation("✅ Database is up to date, no migrations needed");
+    }
     
     // Seed initial data
     await SeedData.Initialize(context);
@@ -288,9 +298,18 @@ try
     logger.LogInformation("✅ Connected to database: {ConnectionInfo}", maskedConnection);
     
     Console.WriteLine("🚀 RadiatorStock API started successfully!");
-    Console.WriteLine($"📊 Environment: {app.Environment.EnvironmentName}");
-    Console.WriteLine($"🔗 API Documentation: {(app.Environment.IsDevelopment() ? "http://localhost:5128" : "")}/swagger");
+    Console.WriteLine($"📊 Environment: {env.EnvironmentName}");
+    Console.WriteLine($"🌐 CORS Policy: {(env.IsDevelopment() ? "Allow Any Origin (Development)" : "Restricted (Production)")}");
+    Console.WriteLine($"🔗 API Documentation: {(env.IsDevelopment() ? "http://localhost:5128" : "")}/swagger");
     Console.WriteLine($"💚 Health Check: /health");
+    Console.WriteLine($"📍 API Info: /api/v1/info");
+    Console.WriteLine($"🏓 Ping: /ping");
+    
+    // Show network information
+    Console.WriteLine("🌍 Network Access:");
+    Console.WriteLine($"   - Localhost: http://localhost:5128");
+    Console.WriteLine($"   - Network: http://{Environment.MachineName}:5128");
+    Console.WriteLine($"   - IP Access: http://[your-ip]:5128");
 }
 catch (Exception ex)
 {
@@ -301,12 +320,31 @@ catch (Exception ex)
     // In production, you might want to exit gracefully instead of throwing
     if (app.Environment.IsDevelopment())
     {
-        throw;
+        Console.WriteLine("⚠️ Development mode: API will start anyway for debugging");
+        Console.WriteLine("🔍 Check your database connection string and ensure PostgreSQL is running");
+        Console.WriteLine("🌐 CORS is configured to allow any origin in development");
     }
     else
     {
-        Console.WriteLine("⚠️ Starting API without database - some features may not work");
+        Console.WriteLine("⚠️ Production mode: Starting API without database - some features may not work");
     }
 }
 
 app.Run();
+
+// Extension method for security headers
+public static class SecurityHeadersExtensions
+{
+    public static IApplicationBuilder UseSecurityHeaders(this IApplicationBuilder app)
+    {
+        return app.Use(async (context, next) =>
+        {
+            context.Response.Headers.Add("X-Content-Type-Options", "nosniff");
+            context.Response.Headers.Add("X-Frame-Options", "DENY");
+            context.Response.Headers.Add("X-XSS-Protection", "1; mode=block");
+            context.Response.Headers.Add("Referrer-Policy", "strict-origin-when-cross-origin");
+            
+            await next();
+        });
+    }
+}

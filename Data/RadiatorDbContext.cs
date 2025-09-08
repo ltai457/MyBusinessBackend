@@ -40,6 +40,10 @@ namespace RadiatorStockAPI.Data
                 entity.HasIndex(w => w.Code).IsUnique();
                 entity.Property(w => w.Code).IsRequired().HasMaxLength(10);
                 entity.Property(w => w.Name).IsRequired().HasMaxLength(100);
+                entity.Property(w => w.Address).HasMaxLength(500);
+                entity.Property(w => w.Email).HasMaxLength(150);
+                entity.Property(w => w.Phone).HasMaxLength(20);
+                entity.Property(w => w.Location).HasMaxLength(200);
             });
             
             // Configure StockLevel
