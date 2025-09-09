@@ -10,7 +10,7 @@ namespace RadiatorStockAPI.DTOs
 
         [Required(ErrorMessage = "Warehouse code is required")]
         [StringLength(10, MinimumLength = 2, ErrorMessage = "Code must be between 2 and 10 characters")]
-        [RegularExpression(@"^[A-Z0-9]+$", ErrorMessage = "Code can only contain uppercase letters and numbers")]
+        [RegularExpression(@"^[A-Z0-9_]+$", ErrorMessage = "Code can only contain uppercase letters, numbers, and underscores")]
         public string Code { get; set; } = string.Empty;
 
         [StringLength(100, ErrorMessage = "Location cannot exceed 100 characters")]
