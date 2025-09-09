@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization; // ADD THIS LINE
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using RadiatorStockAPI.DTOs;
@@ -38,7 +39,6 @@ namespace RadiatorStockAPI.Controllers
             if (response == null)
                 return Conflict(new { message = "Username or email already exists." });
 
-            // For convenience, return 201 with body
             return Created(string.Empty, response);
         }
 
@@ -64,11 +64,11 @@ namespace RadiatorStockAPI.Controllers
         }
 
         [HttpPost("change-password")]
+        [Authorize] // ADD THIS LINE - only this endpoint needs auth
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto changePasswordDto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            // No auth context — pass Guid.Empty (service can still validate current password)
             Guid.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userGuid);
             var ok = await _authService.ChangePasswordAsync(userGuid, changePasswordDto);
             if (!ok) return BadRequest(new { message = "Current password is incorrect." });
@@ -77,6 +77,7 @@ namespace RadiatorStockAPI.Controllers
         }
 
         [HttpGet("me")]
+        [Authorize] // ADD THIS LINE - only this endpoint needs auth
         public IActionResult Me()
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

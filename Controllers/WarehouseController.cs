@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RadiatorStockAPI.DTOs;
 using RadiatorStockAPI.Services;
@@ -7,6 +8,7 @@ namespace RadiatorStockAPI.Controllers
     [ApiController]
     [Route("api/v1/warehouses")]
     [Produces("application/json")]
+    [Authorize] // Add this
     public class WarehousesController : ControllerBase
     {
         private readonly IWarehouseService _warehouseService;
@@ -34,6 +36,7 @@ namespace RadiatorStockAPI.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin,Staff")] // Add this - both can create
         public async Task<ActionResult<WarehouseDto>> CreateWarehouse([FromBody] CreateWarehouseDto dto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -47,6 +50,7 @@ namespace RadiatorStockAPI.Controllers
         }
 
         [HttpPut("{id:guid}")]
+        [Authorize(Roles = "Admin,Staff")] // Add this - both can update
         public async Task<ActionResult<WarehouseDto>> UpdateWarehouse(Guid id, [FromBody] UpdateWarehouseDto dto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -60,6 +64,7 @@ namespace RadiatorStockAPI.Controllers
         }
 
         [HttpDelete("{id:guid}")]
+        [Authorize(Roles = "Admin")] // Add this - only Admin can delete
         public async Task<ActionResult> DeleteWarehouse(Guid id)
         {
             var warehouse = await _warehouseService.GetWarehouseByIdAsync(id);

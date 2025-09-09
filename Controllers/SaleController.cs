@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using RadiatorStockAPI.DTOs;
@@ -8,6 +9,7 @@ namespace RadiatorStockAPI.Controllers
     [ApiController]
     [Route("api/v1/sales")]
     [Produces("application/json")]
+    [Authorize] // Add this
     public class SalesController : ControllerBase
     {
         private readonly ISalesService _salesService;
@@ -18,11 +20,11 @@ namespace RadiatorStockAPI.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin,Staff")] // Add this - both can create sales
         public async Task<ActionResult<SaleResponseDto>> CreateSale([FromBody] CreateSaleDto dto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            // No auth — attempt to parse user id, default to Guid.Empty if not present
             Guid.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userGuid);
 
             var sale = await _salesService.CreateSaleAsync(dto, userGuid);
@@ -72,6 +74,7 @@ namespace RadiatorStockAPI.Controllers
         }
 
         [HttpPost("{id:guid}/cancel")]
+        [Authorize(Roles = "Admin")] // Add this - only Admin can cancel
         public async Task<IActionResult> CancelSale(Guid id)
         {
             if (!await _salesService.SaleExistsAsync(id))
@@ -85,6 +88,7 @@ namespace RadiatorStockAPI.Controllers
         }
 
         [HttpPost("{id:guid}/refund")]
+        [Authorize(Roles = "Admin")] // Add this - only Admin can refund
         public async Task<ActionResult<SaleResponseDto>> RefundSale(Guid id)
         {
             if (!await _salesService.SaleExistsAsync(id))
