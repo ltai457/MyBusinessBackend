@@ -98,13 +98,12 @@ namespace RadiatorStockAPI.Controllers
 
             try
             {
-                var radiator = await _radiatorService.CreateRadiatorWithImageAsync(
-                    dto.Brand, dto.Code, dto.Name, dto.Year, dto.RetailPrice, dto.Image);
+                var created = await _radiatorService.CreateRadiatorWithImageAsync(dto);
 
-                if (radiator == null)
+                if (created == null)
                     return Conflict(new { message = $"A radiator with code '{dto.Code}' already exists." });
 
-                return CreatedAtAction(nameof(GetRadiator), new { id = radiator.Id }, radiator);
+                return CreatedAtAction(nameof(GetRadiator), new { id = created.Id }, created);
             }
             catch (Exception ex)
             {

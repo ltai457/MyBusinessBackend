@@ -50,7 +50,7 @@ namespace RadiatorStockAPI.Services
                 IsPriceOverridable = r.IsPriceOverridable,
                 MaxDiscountPercent = r.MaxDiscountPercent,
                 Stock = BuildStockDictInMemory(r.StockLevels),
-                
+
                 // Add image properties
                 PrimaryImageUrl = r.Images?.FirstOrDefault(img => img.IsPrimary)?.Url,
                 ImageCount = r.Images?.Count ?? 0
@@ -72,7 +72,7 @@ namespace RadiatorStockAPI.Services
                 IsPriceOverridable = r.IsPriceOverridable,
                 MaxDiscountPercent = r.MaxDiscountPercent,
                 Stock = BuildStockDictInMemory(r.StockLevels),
-                
+
                 // Add image properties
                 HasImage = r.Images?.Any() ?? false,
                 ImageUrl = r.Images?.FirstOrDefault(img => img.IsPrimary)?.Url,
@@ -277,7 +277,7 @@ namespace RadiatorStockAPI.Services
             var entity = await _context.Radiators
                 .Include(r => r.Images)
                 .FirstOrDefaultAsync(r => r.Id == id);
-            
+
             if (entity is null) return false;
 
             // Delete all images from S3 first
@@ -300,7 +300,7 @@ namespace RadiatorStockAPI.Services
                 return null;
 
             var uploadResult = await _s3Service.UploadImageAsync(dto.Image);
-            
+
             if (string.IsNullOrEmpty(uploadResult))
                 return null;
 
@@ -453,6 +453,86 @@ namespace RadiatorStockAPI.Services
                 .Select(ToListDto)
                 .ToList();
         }
+        public async Task<RadiatorResponseDto?> CreateRadiatorWithImageAsync(CreateRadiatorWithImageDto dto)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                if (await CodeExistsAsync(dto.Code))
+                    return null;
+
+                var now = DateTime.UtcNow;
+
+                var radiator = new Radiator
+                {
+                    Id = Guid.NewGuid(),
+                    Brand = dto.Brand,
+                    Code = dto.Code,
+                    Name = dto.Name,
+                    Year = dto.Year,
+                    RetailPrice = dto.RetailPrice,
+                    TradePrice = dto.TradePrice,
+                    CostPrice = dto.CostPrice,
+                    IsPriceOverridable = dto.IsPriceOverridable,
+                    MaxDiscountPercent = dto.MaxDiscountPercent,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+
+                _context.Radiators.Add(radiator);
+
+                // Initialize stock
+                var warehouses = await _warehouseService.GetAllWarehousesAsync();
+                foreach (var wh in warehouses)
+                {
+                    var qty = 0;
+                    if (dto.InitialStock != null && dto.InitialStock.TryGetValue(wh.Code, out var stockQty))
+                        qty = stockQty;
+
+                    _context.StockLevels.Add(new StockLevel
+                    {
+                        Id = Guid.NewGuid(),
+                        RadiatorId = radiator.Id,
+                        WarehouseId = wh.Id,
+                        Quantity = qty,
+                        CreatedAt = now,
+                        UpdatedAt = now
+                    });
+                }
+
+                await _context.SaveChangesAsync();
+
+                // Upload image if provided
+                if (dto.Image != null)
+                {
+                    var imageUrl = await _s3Service.UploadImageAsync(dto.Image);
+
+                    var radiatorImage = new RadiatorImage
+                    {
+                        Id = Guid.NewGuid(),
+                        RadiatorId = radiator.Id,
+                        FileName = dto.Image.FileName,
+                        S3Key = imageUrl.Split('/').Last(),
+                        Url = imageUrl,
+                        IsPrimary = true,
+                        CreatedAt = now
+                    };
+
+                    _context.RadiatorImages.Add(radiatorImage);
+                    await _context.SaveChangesAsync();
+                }
+
+                await transaction.CommitAsync();
+                return await GetRadiatorByIdAsync(radiator.Id);
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
 
         // -----------------------------
         // Test method
@@ -461,5 +541,8 @@ namespace RadiatorStockAPI.Services
         {
             return await _s3Service.UploadImageAsync(file);
         }
+
+
+
     }
 }
