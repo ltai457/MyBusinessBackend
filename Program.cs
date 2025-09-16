@@ -5,7 +5,11 @@ using Microsoft.OpenApi.Models;
 using System.Text;
 using RadiatorStockAPI.Data;
 using RadiatorStockAPI.Services;
+using Amazon.S3;
 
+
+// Load .env file
+DotNetEnv.Env.Load();
 var builder = WebApplication.CreateBuilder(args);
 
 // Build connection string with support for environment variables and RDS
@@ -27,6 +31,14 @@ if (string.IsNullOrEmpty(connectionString))
 builder.Services.AddDbContext<RadiatorDbContext>(options =>
     options.UseNpgsql(connectionString));
 
+var awsOptions = builder.Configuration.GetAWSOptions();
+awsOptions.Region = Amazon.RegionEndpoint.GetBySystemName(
+    builder.Configuration["AWS:Region"] ?? "us-east-2"
+);
+
+builder.Services.AddDefaultAWSOptions(awsOptions);
+builder.Services.AddAWSService<IAmazonS3>();
+
 // Register services
 builder.Services.AddScoped<IWarehouseService, WarehouseService>();
 builder.Services.AddScoped<IStockService, StockService>();
@@ -35,6 +47,8 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<ISalesService, SalesService>();
+// Add this line with your other services
+builder.Services.AddScoped<IS3Service, S3Service>();
 
 // Add health checks for monitoring
 builder.Services.AddHealthChecks()
