@@ -27,13 +27,19 @@ namespace RadiatorStockAPI.Data
 
             // Configure Radiator
             modelBuilder.Entity<Radiator>(entity =>
-            {
-                entity.HasKey(r => r.Id);
-                entity.HasIndex(r => r.Code).IsUnique();
-                entity.Property(r => r.Brand).IsRequired().HasMaxLength(100);
-                entity.Property(r => r.Code).IsRequired().HasMaxLength(50);
-                entity.Property(r => r.Name).IsRequired().HasMaxLength(200);
-            });
+ {
+     entity.HasKey(r => r.Id);
+     entity.HasIndex(r => r.Code).IsUnique();
+     entity.Property(r => r.Brand).IsRequired().HasMaxLength(100);
+     entity.Property(r => r.Code).IsRequired().HasMaxLength(50);
+     entity.Property(r => r.Name).IsRequired().HasMaxLength(200);
+
+     // ===== ADD THESE NEW LINES =====
+     entity.Property(r => r.ProductType).HasMaxLength(100);
+     entity.Property(r => r.Dimensions).HasMaxLength(200);
+     entity.Property(r => r.Notes).HasMaxLength(500);
+     // ===============================
+ });
 
             // Configure Warehouse
             modelBuilder.Entity<Warehouse>(entity =>

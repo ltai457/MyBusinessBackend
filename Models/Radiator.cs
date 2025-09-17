@@ -21,7 +21,7 @@ namespace RadiatorStockAPI.Models
         [Range(1900, 2030)]
         public int Year { get; set; }
 
-        // ===== ADD THESE NEW FIELDS =====
+        // ===== EXISTING PRICING FIELDS =====
         [Range(0, double.MaxValue)]
         public decimal RetailPrice { get; set; } = 0;
 
@@ -35,15 +35,23 @@ namespace RadiatorStockAPI.Models
 
         [Range(0, 100)]
         public decimal? MaxDiscountPercent { get; set; } = 20;
-        // =================================
+
+        // ===== NEW FIELDS - ADD THESE =====
+        [StringLength(100)]
+        public string? ProductType { get; set; }  // "Vehicle", "Truck", "Machinery", etc.
+        
+        [StringLength(200)]
+        public string? Dimensions { get; set; }   // "250x240x40mm" or "500x600"
+        
+        [StringLength(500)]
+        public string? Notes { get; set; }        // Additional product notes
+        // ==================================
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation properties
         public virtual ICollection<StockLevel> StockLevels { get; set; } = new List<StockLevel>();
-        
-        // Add this line to your existing navigation properties section
         public virtual ICollection<RadiatorImage> Images { get; set; } = new List<RadiatorImage>(); 
     }
 }

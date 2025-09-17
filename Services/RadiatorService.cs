@@ -51,6 +51,11 @@ namespace RadiatorStockAPI.Services
                 MaxDiscountPercent = r.MaxDiscountPercent,
                 Stock = BuildStockDictInMemory(r.StockLevels),
 
+                // NEW FIELDS ADDED
+                ProductType = r.ProductType,
+                Dimensions = r.Dimensions,
+                Notes = r.Notes,
+
                 // Add image properties
                 PrimaryImageUrl = r.Images?.FirstOrDefault(img => img.IsPrimary)?.Url,
                 ImageCount = r.Images?.Count ?? 0
@@ -72,6 +77,11 @@ namespace RadiatorStockAPI.Services
                 IsPriceOverridable = r.IsPriceOverridable,
                 MaxDiscountPercent = r.MaxDiscountPercent,
                 Stock = BuildStockDictInMemory(r.StockLevels),
+
+                // NEW FIELDS ADDED
+                ProductType = r.ProductType,
+                Dimensions = r.Dimensions,
+                Notes = r.Notes,
 
                 // Add image properties
                 HasImage = r.Images?.Any() ?? false,
@@ -104,6 +114,12 @@ namespace RadiatorStockAPI.Services
                 CostPrice = dto.CostPrice,
                 IsPriceOverridable = dto.IsPriceOverridable,
                 MaxDiscountPercent = dto.MaxDiscountPercent,
+                
+                // NEW FIELDS ADDED
+                ProductType = dto.ProductType,
+                Dimensions = dto.Dimensions,
+                Notes = dto.Notes,
+                
                 CreatedAt = now,
                 UpdatedAt = now
             };
@@ -265,6 +281,11 @@ namespace RadiatorStockAPI.Services
             if (dto.CostPrice.HasValue) entity.CostPrice = dto.CostPrice.Value;
             if (dto.IsPriceOverridable.HasValue) entity.IsPriceOverridable = dto.IsPriceOverridable.Value;
             if (dto.MaxDiscountPercent.HasValue) entity.MaxDiscountPercent = dto.MaxDiscountPercent.Value;
+
+            // NEW FIELDS ADDED
+            entity.ProductType = dto.ProductType ?? entity.ProductType;
+            entity.Dimensions = dto.Dimensions ?? entity.Dimensions;
+            entity.Notes = dto.Notes ?? entity.Notes;
 
             entity.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
@@ -453,6 +474,7 @@ namespace RadiatorStockAPI.Services
                 .Select(ToListDto)
                 .ToList();
         }
+
         public async Task<RadiatorResponseDto?> CreateRadiatorWithImageAsync(CreateRadiatorWithImageDto dto)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
@@ -476,6 +498,12 @@ namespace RadiatorStockAPI.Services
                     CostPrice = dto.CostPrice,
                     IsPriceOverridable = dto.IsPriceOverridable,
                     MaxDiscountPercent = dto.MaxDiscountPercent,
+
+                    // NEW FIELDS ADDED
+                    ProductType = dto.ProductType,
+                    Dimensions = dto.Dimensions,
+                    Notes = dto.Notes,
+
                     CreatedAt = now,
                     UpdatedAt = now
                 };
@@ -533,7 +561,6 @@ namespace RadiatorStockAPI.Services
             }
         }
 
-
         // -----------------------------
         // Test method
         // -----------------------------
@@ -541,8 +568,5 @@ namespace RadiatorStockAPI.Services
         {
             return await _s3Service.UploadImageAsync(file);
         }
-
-
-
     }
 }

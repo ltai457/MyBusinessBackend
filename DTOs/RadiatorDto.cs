@@ -13,6 +13,15 @@ namespace RadiatorStockAPI.DTOs
         [Range(0, double.MaxValue)] public decimal? CostPrice { get; set; }
         public bool IsPriceOverridable { get; set; } = true;
         [Range(0, 100)] public decimal? MaxDiscountPercent { get; set; } = 20;
+
+        [StringLength(100)]
+        public string? ProductType { get; set; }
+
+        [StringLength(200)]
+        public string? Dimensions { get; set; }
+
+        [StringLength(500)]
+        public string? Notes { get; set; }
     }
 
     public class UpdateRadiatorDto
@@ -26,6 +35,15 @@ namespace RadiatorStockAPI.DTOs
         [Range(0, double.MaxValue)] public decimal? CostPrice { get; set; }
         public bool? IsPriceOverridable { get; set; }
         [Range(0, 100)] public decimal? MaxDiscountPercent { get; set; }
+
+        [StringLength(100)]
+        public string? ProductType { get; set; }
+
+        [StringLength(200)]
+        public string? Dimensions { get; set; }
+
+        [StringLength(500)]
+        public string? Notes { get; set; }
     }
 
     public class UpdateRadiatorPriceDto
@@ -49,6 +67,11 @@ namespace RadiatorStockAPI.DTOs
         public decimal? MaxDiscountPercent { get; set; }
         public Dictionary<string, int> Stock { get; set; } = new();
 
+        // New fields added
+        public string? ProductType { get; set; }
+        public string? Dimensions { get; set; }
+        public string? Notes { get; set; }
+
         public string? PrimaryImageUrl { get; set; }
         public int ImageCount { get; set; }
     }
@@ -67,6 +90,11 @@ namespace RadiatorStockAPI.DTOs
         public decimal? MaxDiscountPercent { get; set; }
         public Dictionary<string, int> Stock { get; set; } = new();
 
+        // New fields added
+        public string? ProductType { get; set; }
+        public string? Dimensions { get; set; }
+        public string? Notes { get; set; }
+
         public bool HasImage { get; set; }
         public string? ImageUrl { get; set; }
         public int ImageCount { get; set; }
@@ -75,7 +103,6 @@ namespace RadiatorStockAPI.DTOs
         public DateTime UpdatedAt { get; set; }
     }
 
-    // ✅ Full create DTO with image + stock
     public class CreateRadiatorWithImageDto
     {
         [Required, StringLength(100)] public string Brand { get; set; } = string.Empty;
@@ -88,8 +115,17 @@ namespace RadiatorStockAPI.DTOs
         public bool IsPriceOverridable { get; set; } = true;
         [Range(0, 100)] public decimal? MaxDiscountPercent { get; set; } = 20;
 
-        public Dictionary<string, int>? InitialStock { get; set; }
+        // New fields added
+        [StringLength(100)]
+        public string? ProductType { get; set; }
 
+        [StringLength(200)]
+        public string? Dimensions { get; set; }
+
+        [StringLength(500)]
+        public string? Notes { get; set; }
+
+        public Dictionary<string, int>? InitialStock { get; set; }
         public IFormFile? Image { get; set; }
     }
 
