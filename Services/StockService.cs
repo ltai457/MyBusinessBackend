@@ -111,55 +111,75 @@ namespace RadiatorStockAPI.Services
             };
         }
 
-        public async Task<IEnumerable<RadiatorWithStockDto>> GetAllRadiatorsWithStockAsync(string? search = null, bool lowStockOnly = false, string? warehouseCode = null)
+        public async Task<IEnumerable<RadiatorWithStockDto>> GetAllRadiatorsWithStockAsync(
+    string? search = null, 
+    bool lowStockOnly = false, 
+    string? warehouseCode = null)
+{
+    // Start with radiators query that includes pricing
+    var radiatorsQuery = _context.Radiators.AsQueryable();
+
+    // Apply search filter
+    if (!string.IsNullOrEmpty(search))
+    {
+        var searchLower = search.ToLower();
+        radiatorsQuery = radiatorsQuery.Where(r => 
+            r.Name.ToLower().Contains(searchLower) ||
+            r.Code.ToLower().Contains(searchLower) ||
+            r.Brand.ToLower().Contains(searchLower));
+    }
+
+    var radiators = await radiatorsQuery.ToListAsync();
+    var result = new List<RadiatorWithStockDto>();
+
+    foreach (var radiator in radiators)
+    {
+        // Get stock for this radiator
+        var stockDict = await GetStockDictionaryAsync(radiator.Id);
+        
+        // Calculate stock metrics
+        var totalStock = stockDict.Values.Sum();
+        var hasLowStock = stockDict.Values.Any(q => q > 0 && q <= 5);
+        var hasOutOfStock = stockDict.Values.Any(q => q == 0);
+
+        // Apply filters
+        if (lowStockOnly && !hasLowStock && !hasOutOfStock)
+            continue;
+
+        if (!string.IsNullOrEmpty(warehouseCode) && 
+            !stockDict.ContainsKey(warehouseCode.ToUpper()))
+            continue;
+
+        // ✅ CREATE DTO WITH PRICING FIELDS
+        var dto = new RadiatorWithStockDto
         {
-            var query = _context.Radiators.AsQueryable();
+            Id = radiator.Id,
+            Name = radiator.Name,
+            Code = radiator.Code,
+            Brand = radiator.Brand,
+            Year = radiator.Year,
+            
+            // ✅ INCLUDE PRICING DATA
+            RetailPrice = radiator.RetailPrice,
+            TradePrice = radiator.TradePrice,
+            CostPrice = radiator.CostPrice,
+            IsPriceOverridable = radiator.IsPriceOverridable,
+            MaxDiscountPercent = radiator.MaxDiscountPercent,
+            
+            // Stock data
+            Stock = stockDict,
+            TotalStock = totalStock,
+            HasLowStock = hasLowStock,
+            HasOutOfStock = hasOutOfStock,
+            CreatedAt = radiator.CreatedAt,
+            UpdatedAt = radiator.UpdatedAt
+        };
 
-            // Apply search filter
-            if (!string.IsNullOrEmpty(search))
-            {
-                var searchLower = search.ToLower();
-                query = query.Where(r => 
-                    r.Name.ToLower().Contains(searchLower) ||
-                    r.Code.ToLower().Contains(searchLower) ||
-                    r.Brand.ToLower().Contains(searchLower));
-            }
+        result.Add(dto);
+    }
 
-            var radiators = await query.ToListAsync();
-            var result = new List<RadiatorWithStockDto>();
-
-            foreach (var radiator in radiators)
-            {
-                var stock = await GetStockDictionaryAsync(radiator.Id);
-                var totalStock = stock.Values.Sum();
-                var hasLowStock = stock.Values.Any(q => q > 0 && q <= 5);
-                var hasOutOfStock = stock.Values.Any(q => q == 0);
-
-                // Apply filters
-                if (lowStockOnly && !hasLowStock && !hasOutOfStock)
-                    continue;
-
-                if (!string.IsNullOrEmpty(warehouseCode) && !stock.ContainsKey(warehouseCode.ToUpper()))
-                    continue;
-
-                result.Add(new RadiatorWithStockDto
-                {
-                    Id = radiator.Id,
-                    Name = radiator.Name,
-                    Code = radiator.Code,
-                    Brand = radiator.Brand,
-                    Year = radiator.Year,
-                    Stock = stock,
-                    TotalStock = totalStock,
-                    HasLowStock = hasLowStock,
-                    HasOutOfStock = hasOutOfStock,
-                    CreatedAt = radiator.CreatedAt,
-                    UpdatedAt = radiator.UpdatedAt
-                });
-            }
-
-            return result;
-        }
+    return result;
+}
 
         public async Task<IEnumerable<LowStockItemDto>> GetLowStockItemsAsync(int threshold = 5)
         {
