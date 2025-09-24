@@ -110,6 +110,38 @@ namespace RadiatorStockAPI.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
+        [HttpPost("{id:guid}/images")]
+        [Authorize(Roles = "Admin,Staff")]
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<RadiatorImageDto>> UploadRadiatorImage(Guid id, [FromForm] UploadRadiatorImageDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            try
+            {
+                var result = await _radiatorService.AddImageToRadiatorAsync(id, dto);
+
+                if (result == null)
+                    return NotFound(new { message = $"Radiator with ID {id} not found." });
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("{id:guid}/images")]
+        public async Task<ActionResult<List<RadiatorImageDto>>> GetRadiatorImages(Guid id)
+        {
+            if (!await _radiatorService.RadiatorExistsAsync(id))
+                return NotFound(new { message = $"Radiator with ID {id} not found." });
+
+            var images = await _radiatorService.GetRadiatorImagesAsync(id);
+            return Ok(images);
+        }
 
     }
 }
