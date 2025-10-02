@@ -1,3 +1,5 @@
+// Services/StockService.cs
+// COMPLETE FILE - OPTIMIZED VERSION
 using Microsoft.EntityFrameworkCore;
 using RadiatorStockAPI.Data;
 using RadiatorStockAPI.DTOs;
@@ -18,7 +20,7 @@ namespace RadiatorStockAPI.Services
             _logger = logger;
         }
 
-        // Existing methods
+        // Get stock for a single radiator
         public async Task<StockResponseDto?> GetRadiatorStockAsync(Guid radiatorId)
         {
             var radiatorExists = await _context.Radiators.AnyAsync(r => r.Id == radiatorId);
@@ -29,6 +31,7 @@ namespace RadiatorStockAPI.Services
             return new StockResponseDto { Stock = stock };
         }
 
+        // Update stock for a radiator in a specific warehouse
         public async Task<bool> UpdateStockAsync(Guid radiatorId, UpdateStockDto dto)
         {
             // Verify radiator exists
@@ -73,7 +76,101 @@ namespace RadiatorStockAPI.Services
             return true;
         }
 
-        // New enhanced methods
+        // ✅✅✅ OPTIMIZED METHOD - THIS IS THE KEY FIX! ✅✅✅
+        public async Task<IEnumerable<RadiatorWithStockDto>> GetAllRadiatorsWithStockAsync(
+            string? search = null, 
+            bool lowStockOnly = false, 
+            string? warehouseCode = null)
+        {
+            _logger.LogInformation("📊 GetAllRadiatorsWithStockAsync - Optimized version starting...");
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+            // ✅ FIX 1: Use Include to load ALL related data in ONE query
+            var query = _context.Radiators
+                .Include(r => r.StockLevels)           // Load stock levels
+                    .ThenInclude(sl => sl.Warehouse)   // Load warehouses
+                .AsQueryable();
+
+            // ✅ FIX 2: Apply search filter at DATABASE level (not in memory)
+            if (!string.IsNullOrEmpty(search))
+            {
+                var searchLower = search.ToLower();
+                query = query.Where(r => 
+                    r.Name.ToLower().Contains(searchLower) ||
+                    r.Code.ToLower().Contains(searchLower) ||
+                    r.Brand.ToLower().Contains(searchLower));
+            }
+
+            // ✅ FIX 3: Apply warehouse filter at DATABASE level
+            if (!string.IsNullOrEmpty(warehouseCode))
+            {
+                var warehouseUpper = warehouseCode.ToUpper();
+                query = query.Where(r => 
+                    r.StockLevels.Any(sl => sl.Warehouse.Code == warehouseUpper));
+            }
+
+            // ✅ FIX 4: Apply low stock filter at DATABASE level
+            if (lowStockOnly)
+            {
+                // Get radiators that have low stock (1-5) OR out of stock (0) in ANY warehouse
+                query = query.Where(r => 
+                    r.StockLevels.Any(sl => sl.Quantity >= 0 && sl.Quantity <= 5));
+            }
+
+            // ✅ FIX 5: Execute query ONCE - gets all data with relationships
+            var radiators = await query.ToListAsync();
+
+            stopwatch.Stop();
+            _logger.LogInformation(
+                "✅ Query executed in {ElapsedMs}ms, returned {Count} radiators", 
+                stopwatch.ElapsedMilliseconds, 
+                radiators.Count
+            );
+
+            // ✅ FIX 6: Map to DTO using already-loaded data (NO more database queries!)
+            var result = radiators.Select(radiator => 
+            {
+                // Build stock dictionary from already-loaded StockLevels
+                var stockDict = radiator.StockLevels.ToDictionary(
+                    sl => sl.Warehouse.Code,
+                    sl => sl.Quantity
+                );
+                
+                // Calculate metrics from loaded data
+                var totalStock = stockDict.Values.Sum();
+                var hasLowStock = stockDict.Values.Any(q => q > 0 && q <= 5);
+                var hasOutOfStock = stockDict.Values.Any(q => q == 0);
+
+                return new RadiatorWithStockDto
+                {
+                    Id = radiator.Id,
+                    Name = radiator.Name,
+                    Code = radiator.Code,
+                    Brand = radiator.Brand,
+                    Year = radiator.Year,
+                    
+                    // Pricing data
+                    RetailPrice = radiator.RetailPrice,
+                    TradePrice = radiator.TradePrice,
+                    CostPrice = radiator.CostPrice,
+                    IsPriceOverridable = radiator.IsPriceOverridable,
+                    MaxDiscountPercent = radiator.MaxDiscountPercent,
+                    
+                    // Stock data (already loaded, no DB query needed)
+                    Stock = stockDict,
+                    TotalStock = totalStock,
+                    HasLowStock = hasLowStock,
+                    HasOutOfStock = hasOutOfStock,
+                    CreatedAt = radiator.CreatedAt,
+                    UpdatedAt = radiator.UpdatedAt
+                };
+            }).ToList();
+
+            _logger.LogInformation("✅ Mapping completed, returning {Count} DTOs", result.Count);
+            return result;
+        }
+
+        // Get stock summary for dashboard
         public async Task<StockSummaryDto> GetStockSummaryAsync()
         {
             var totalRadiators = await _context.Radiators.CountAsync();
@@ -111,76 +208,7 @@ namespace RadiatorStockAPI.Services
             };
         }
 
-        public async Task<IEnumerable<RadiatorWithStockDto>> GetAllRadiatorsWithStockAsync(
-    string? search = null, 
-    bool lowStockOnly = false, 
-    string? warehouseCode = null)
-{
-    // Start with radiators query that includes pricing
-    var radiatorsQuery = _context.Radiators.AsQueryable();
-
-    // Apply search filter
-    if (!string.IsNullOrEmpty(search))
-    {
-        var searchLower = search.ToLower();
-        radiatorsQuery = radiatorsQuery.Where(r => 
-            r.Name.ToLower().Contains(searchLower) ||
-            r.Code.ToLower().Contains(searchLower) ||
-            r.Brand.ToLower().Contains(searchLower));
-    }
-
-    var radiators = await radiatorsQuery.ToListAsync();
-    var result = new List<RadiatorWithStockDto>();
-
-    foreach (var radiator in radiators)
-    {
-        // Get stock for this radiator
-        var stockDict = await GetStockDictionaryAsync(radiator.Id);
-        
-        // Calculate stock metrics
-        var totalStock = stockDict.Values.Sum();
-        var hasLowStock = stockDict.Values.Any(q => q > 0 && q <= 5);
-        var hasOutOfStock = stockDict.Values.Any(q => q == 0);
-
-        // Apply filters
-        if (lowStockOnly && !hasLowStock && !hasOutOfStock)
-            continue;
-
-        if (!string.IsNullOrEmpty(warehouseCode) && 
-            !stockDict.ContainsKey(warehouseCode.ToUpper()))
-            continue;
-
-        // ✅ CREATE DTO WITH PRICING FIELDS
-        var dto = new RadiatorWithStockDto
-        {
-            Id = radiator.Id,
-            Name = radiator.Name,
-            Code = radiator.Code,
-            Brand = radiator.Brand,
-            Year = radiator.Year,
-            
-            // ✅ INCLUDE PRICING DATA
-            RetailPrice = radiator.RetailPrice,
-            TradePrice = radiator.TradePrice,
-            CostPrice = radiator.CostPrice,
-            IsPriceOverridable = radiator.IsPriceOverridable,
-            MaxDiscountPercent = radiator.MaxDiscountPercent,
-            
-            // Stock data
-            Stock = stockDict,
-            TotalStock = totalStock,
-            HasLowStock = hasLowStock,
-            HasOutOfStock = hasOutOfStock,
-            CreatedAt = radiator.CreatedAt,
-            UpdatedAt = radiator.UpdatedAt
-        };
-
-        result.Add(dto);
-    }
-
-    return result;
-}
-
+        // Get low stock items
         public async Task<IEnumerable<LowStockItemDto>> GetLowStockItemsAsync(int threshold = 5)
         {
             return await _context.StockLevels
@@ -202,6 +230,7 @@ namespace RadiatorStockAPI.Services
                 .ToListAsync();
         }
 
+        // Get out of stock items
         public async Task<IEnumerable<OutOfStockItemDto>> GetOutOfStockItemsAsync()
         {
             return await _context.StockLevels
@@ -221,6 +250,7 @@ namespace RadiatorStockAPI.Services
                 .ToListAsync();
         }
 
+        // Bulk update stock
         public async Task<BulkUpdateResultDto> BulkUpdateStockAsync(BulkUpdateStockDto dto)
         {
             var result = new BulkUpdateResultDto();
@@ -267,6 +297,7 @@ namespace RadiatorStockAPI.Services
             return result;
         }
 
+        // Get warehouse stock
         public async Task<WarehouseStockDto?> GetWarehouseStockAsync(string warehouseCode)
         {
             var warehouse = await _warehouseService.GetWarehouseByCodeAsync(warehouseCode);
@@ -301,12 +332,20 @@ namespace RadiatorStockAPI.Services
             };
         }
 
-        public async Task<IEnumerable<StockHistoryDto>> GetStockHistoryAsync(Guid radiatorId, DateTime? fromDate = null, DateTime? toDate = null, string? warehouseCode = null)
+        // Get stock history
+        public async Task<IEnumerable<StockHistoryDto>> GetStockHistoryAsync(
+            Guid radiatorId, 
+            DateTime? fromDate = null, 
+            DateTime? toDate = null, 
+            string? warehouseCode = null)
         {
             // This would require a StockHistory table - placeholder implementation
+            // You can implement this later if you add a StockHistory table to track changes
+            _logger.LogInformation("Stock history requested but not implemented yet");
             return new List<StockHistoryDto>();
         }
 
+        // Adjust stock (with reason tracking)
         public async Task<StockAdjustmentResultDto> AdjustStockAsync(StockAdjustmentDto dto)
         {
             try
@@ -346,7 +385,7 @@ namespace RadiatorStockAPI.Services
             }
         }
 
-        // Helper methods
+        // Helper: Get stock dictionary for a radiator
         public async Task<Dictionary<string, int>> GetStockDictionaryAsync(Guid radiatorId)
         {
             var stockLevels = await _context.StockLevels
@@ -360,10 +399,27 @@ namespace RadiatorStockAPI.Services
             );
         }
 
-        private async Task LogStockHistoryAsync(Guid radiatorId, string warehouseCode, int oldQuantity, int newQuantity, string changeType, Guid? updatedBy)
+        // Helper: Log stock history
+        private async Task LogStockHistoryAsync(
+            Guid radiatorId, 
+            string warehouseCode, 
+            int oldQuantity, 
+            int newQuantity, 
+            string changeType, 
+            Guid? updatedBy)
         {
-            // This would require a StockHistory table - placeholder implementation
-            _logger.LogInformation($"Stock changed for radiator {radiatorId} in warehouse {warehouseCode}: {oldQuantity} -> {newQuantity} ({changeType})");
+            // This would log to a StockHistory table if you have one
+            // For now, just log to console
+            _logger.LogInformation(
+                "Stock changed for radiator {RadiatorId} in warehouse {WarehouseCode}: {OldQty} -> {NewQty} ({ChangeType})",
+                radiatorId,
+                warehouseCode,
+                oldQuantity,
+                newQuantity,
+                changeType
+            );
+            
+            await Task.CompletedTask; // Placeholder for async pattern
         }
     }
 }

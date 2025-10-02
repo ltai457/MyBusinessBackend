@@ -28,22 +28,17 @@ namespace RadiatorStockAPI.Services
                 BucketName = _bucketName,
                 Key = key,
                 InputStream = stream,
-                ContentType = file.ContentType
+                ContentType = file.ContentType,
+                CannedACL = S3CannedACL.PublicRead  // ✅ ADDED - Makes image publicly accessible
             };
 
             await _s3Client.PutObjectAsync(request);
 
-            // Generate a pre-signed URL with 7 days expiry (maximum allowed)
-            var urlRequest = new GetPreSignedUrlRequest
-            {
-                BucketName = _bucketName,
-                Key = key,
-                Expires = DateTime.UtcNow.AddDays(7), // Changed from 1 year to 7 days
-                Verb = HttpVerb.GET
-            };
-
-            return await _s3Client.GetPreSignedURLAsync(urlRequest);
+            // ✅ CHANGED - Return direct public URL (never expires)
+            var region = _configuration["AWS:S3:Region"] ?? "us-east-2";
+            return $"https://{_bucketName}.s3.{region}.amazonaws.com/{key}";
         }
+
         public async Task<bool> DeleteImageAsync(string key)
         {
             try
@@ -56,9 +51,5 @@ namespace RadiatorStockAPI.Services
                 return false;
             }
         }
-
-
-
-
     }
 }
