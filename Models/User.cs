@@ -1,3 +1,6 @@
+// Models/User.cs
+// REPLACE YOUR EXISTING FILE with this updated version
+
 using System.ComponentModel.DataAnnotations;
 
 namespace RadiatorStockAPI.Models
@@ -14,6 +17,13 @@ namespace RadiatorStockAPI.Models
         [EmailAddress]
         [StringLength(100)]
         public string Email { get; set; } = string.Empty;
+        
+        // ADD THESE NEW FIELDS
+        [StringLength(100)]
+        public string? FirstName { get; set; }
+        
+        [StringLength(100)]
+        public string? LastName { get; set; }
         
         [Required]
         public string PasswordHash { get; set; } = string.Empty;

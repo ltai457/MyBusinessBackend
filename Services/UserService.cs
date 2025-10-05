@@ -1,3 +1,6 @@
+// Services/UserService.cs
+// REPLACE YOUR EXISTING FILE with this updated version
+
 using Microsoft.EntityFrameworkCore;
 using BCrypt.Net;
 using RadiatorStockAPI.Data;
@@ -26,6 +29,8 @@ namespace RadiatorStockAPI.Services
                 Id = u.Id,
                 Username = u.Username,
                 Email = u.Email,
+                FirstName = u.FirstName,  // NEW
+                LastName = u.LastName,    // NEW
                 Role = u.Role,
                 IsActive = u.IsActive,
                 CreatedAt = u.CreatedAt,
@@ -53,6 +58,8 @@ namespace RadiatorStockAPI.Services
                 Id = Guid.NewGuid(),
                 Username = dto.Username,
                 Email = dto.Email,
+                FirstName = dto.FirstName,  // NEW
+                LastName = dto.LastName,    // NEW
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 Role = dto.Role,
                 IsActive = true,
@@ -78,6 +85,8 @@ namespace RadiatorStockAPI.Services
 
             user.Username = dto.Username;
             user.Email = dto.Email;
+            user.FirstName = dto.FirstName;  // NEW
+            user.LastName = dto.LastName;    // NEW
             user.Role = dto.Role;
             user.IsActive = dto.IsActive;
             user.UpdatedAt = DateTime.UtcNow;
@@ -128,6 +137,8 @@ namespace RadiatorStockAPI.Services
                 Id = user.Id,
                 Username = user.Username,
                 Email = user.Email,
+                FirstName = user.FirstName,  // NEW
+                LastName = user.LastName,    // NEW
                 Role = user.Role,
                 IsActive = user.IsActive,
                 CreatedAt = user.CreatedAt,
