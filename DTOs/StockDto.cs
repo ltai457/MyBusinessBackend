@@ -7,7 +7,7 @@ namespace RadiatorStockAPI.DTOs
         [Required]
         [StringLength(10)]
         public string WarehouseCode { get; set; } = string.Empty;
-        
+
         [Range(0, int.MaxValue)]
         public int Quantity { get; set; }
     }
@@ -36,29 +36,29 @@ namespace RadiatorStockAPI.DTOs
         public int OutOfStockItems { get; set; }
     }
 
-public class RadiatorWithStockDto
-{
-    public Guid Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public string Code { get; set; } = string.Empty;
-    public string Brand { get; set; } = string.Empty;
-    public int Year { get; set; }
-    
-    // ✅ ADD THESE PRICING FIELDS
-    public decimal RetailPrice { get; set; }
-    public decimal? TradePrice { get; set; }
-    public decimal? CostPrice { get; set; }
-    public bool IsPriceOverridable { get; set; } = true;
-    public decimal? MaxDiscountPercent { get; set; }
-    
-    // Existing stock fields
-    public Dictionary<string, int> Stock { get; set; } = new();
-    public int TotalStock { get; set; }
-    public bool HasLowStock { get; set; }
-    public bool HasOutOfStock { get; set; }
-    public DateTime CreatedAt { get; set; }
-    public DateTime UpdatedAt { get; set; }
-}
+    public class RadiatorWithStockDto
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Code { get; set; } = string.Empty;
+        public string Brand { get; set; } = string.Empty;
+        public int Year { get; set; }
+
+        // ✅ ADD THESE PRICING FIELDS
+        public decimal RetailPrice { get; set; }
+        public decimal? TradePrice { get; set; }
+        public decimal? CostPrice { get; set; }
+        public bool IsPriceOverridable { get; set; } = true;
+        public decimal? MaxDiscountPercent { get; set; }
+
+        // Existing stock fields
+        public Dictionary<string, int> Stock { get; set; } = new();
+        public int TotalStock { get; set; }
+        public bool HasLowStock { get; set; }
+        public bool HasOutOfStock { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
+    }
 
     public class LowStockItemDto
     {
@@ -96,10 +96,10 @@ public class RadiatorWithStockDto
     {
         [Required]
         public Guid RadiatorId { get; set; }
-        
+
         [Required]
         public string WarehouseCode { get; set; } = string.Empty;
-        
+
         [Range(0, int.MaxValue)]
         public int Quantity { get; set; }
     }
@@ -162,16 +162,16 @@ public class RadiatorWithStockDto
     {
         [Required]
         public Guid RadiatorId { get; set; }
-        
+
         [Required]
         public string WarehouseCode { get; set; } = string.Empty;
-        
+
         [Range(0, int.MaxValue)]
         public int NewQuantity { get; set; }
-        
+
         [Required]
         public string Reason { get; set; } = string.Empty;
-        
+
         public Guid? AdjustedBy { get; set; }
     }
 
@@ -185,5 +185,32 @@ public class RadiatorWithStockDto
         public int NewQuantity { get; set; }
         public string AdjustmentReason { get; set; } = string.Empty;
         public DateTime AdjustedAt { get; set; } = DateTime.UtcNow;
+    }
+
+    public class StockMovementDto
+    {
+        public Guid Id { get; set; }
+        public DateTime Date { get; set; }
+
+        public Guid RadiatorId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
+        public string ProductCode { get; set; } = string.Empty;
+        public string Brand { get; set; } = string.Empty;
+
+        public Guid WarehouseId { get; set; }
+        public string WarehouseCode { get; set; } = string.Empty;
+        public string WarehouseName { get; set; } = string.Empty;
+
+        public string MovementType { get; set; } = string.Empty;
+        public int Quantity { get; set; }
+        public int OldQuantity { get; set; }
+        public int NewQuantity { get; set; }
+
+        public string ChangeType { get; set; } = string.Empty;
+        public string? Notes { get; set; }
+
+        public Guid? SaleId { get; set; }
+        public string? SaleNumber { get; set; }
+        public string? CustomerName { get; set; }
     }
 }

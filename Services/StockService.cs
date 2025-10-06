@@ -78,8 +78,8 @@ namespace RadiatorStockAPI.Services
 
         // ✅✅✅ OPTIMIZED METHOD - THIS IS THE KEY FIX! ✅✅✅
         public async Task<IEnumerable<RadiatorWithStockDto>> GetAllRadiatorsWithStockAsync(
-            string? search = null, 
-            bool lowStockOnly = false, 
+            string? search = null,
+            bool lowStockOnly = false,
             string? warehouseCode = null)
         {
             _logger.LogInformation("📊 GetAllRadiatorsWithStockAsync - Optimized version starting...");
@@ -95,7 +95,7 @@ namespace RadiatorStockAPI.Services
             if (!string.IsNullOrEmpty(search))
             {
                 var searchLower = search.ToLower();
-                query = query.Where(r => 
+                query = query.Where(r =>
                     r.Name.ToLower().Contains(searchLower) ||
                     r.Code.ToLower().Contains(searchLower) ||
                     r.Brand.ToLower().Contains(searchLower));
@@ -105,7 +105,7 @@ namespace RadiatorStockAPI.Services
             if (!string.IsNullOrEmpty(warehouseCode))
             {
                 var warehouseUpper = warehouseCode.ToUpper();
-                query = query.Where(r => 
+                query = query.Where(r =>
                     r.StockLevels.Any(sl => sl.Warehouse.Code == warehouseUpper));
             }
 
@@ -113,7 +113,7 @@ namespace RadiatorStockAPI.Services
             if (lowStockOnly)
             {
                 // Get radiators that have low stock (1-5) OR out of stock (0) in ANY warehouse
-                query = query.Where(r => 
+                query = query.Where(r =>
                     r.StockLevels.Any(sl => sl.Quantity >= 0 && sl.Quantity <= 5));
             }
 
@@ -122,20 +122,20 @@ namespace RadiatorStockAPI.Services
 
             stopwatch.Stop();
             _logger.LogInformation(
-                "✅ Query executed in {ElapsedMs}ms, returned {Count} radiators", 
-                stopwatch.ElapsedMilliseconds, 
+                "✅ Query executed in {ElapsedMs}ms, returned {Count} radiators",
+                stopwatch.ElapsedMilliseconds,
                 radiators.Count
             );
 
             // ✅ FIX 6: Map to DTO using already-loaded data (NO more database queries!)
-            var result = radiators.Select(radiator => 
+            var result = radiators.Select(radiator =>
             {
                 // Build stock dictionary from already-loaded StockLevels
                 var stockDict = radiator.StockLevels.ToDictionary(
                     sl => sl.Warehouse.Code,
                     sl => sl.Quantity
                 );
-                
+
                 // Calculate metrics from loaded data
                 var totalStock = stockDict.Values.Sum();
                 var hasLowStock = stockDict.Values.Any(q => q > 0 && q <= 5);
@@ -148,14 +148,14 @@ namespace RadiatorStockAPI.Services
                     Code = radiator.Code,
                     Brand = radiator.Brand,
                     Year = radiator.Year,
-                    
+
                     // Pricing data
                     RetailPrice = radiator.RetailPrice,
                     TradePrice = radiator.TradePrice,
                     CostPrice = radiator.CostPrice,
                     IsPriceOverridable = radiator.IsPriceOverridable,
                     MaxDiscountPercent = radiator.MaxDiscountPercent,
-                    
+
                     // Stock data (already loaded, no DB query needed)
                     Stock = stockDict,
                     TotalStock = totalStock,
@@ -175,7 +175,7 @@ namespace RadiatorStockAPI.Services
         {
             var totalRadiators = await _context.Radiators.CountAsync();
             var warehouses = await _context.Warehouses.ToListAsync();
-            
+
             var stockLevels = await _context.StockLevels
                 .Include(sl => sl.Warehouse)
                 .Include(sl => sl.Radiator)
@@ -185,7 +185,8 @@ namespace RadiatorStockAPI.Services
             var lowStockItems = stockLevels.Count(sl => sl.Quantity > 0 && sl.Quantity <= 5);
             var outOfStockItems = stockLevels.Count(sl => sl.Quantity == 0);
 
-            var warehouseSummaries = warehouses.Select(w => {
+            var warehouseSummaries = warehouses.Select(w =>
+            {
                 var warehouseStock = stockLevels.Where(sl => sl.WarehouseId == w.Id);
                 return new WarehouseSummaryDto
                 {
@@ -266,7 +267,7 @@ namespace RadiatorStockAPI.Services
                     };
 
                     var success = await UpdateStockAsync(update.RadiatorId, updateDto);
-                    
+
                     if (success)
                     {
                         result.SuccessCount++;
@@ -334,9 +335,9 @@ namespace RadiatorStockAPI.Services
 
         // Get stock history
         public async Task<IEnumerable<StockHistoryDto>> GetStockHistoryAsync(
-            Guid radiatorId, 
-            DateTime? fromDate = null, 
-            DateTime? toDate = null, 
+            Guid radiatorId,
+            DateTime? fromDate = null,
+            DateTime? toDate = null,
             string? warehouseCode = null)
         {
             // This would require a StockHistory table - placeholder implementation
@@ -401,25 +402,122 @@ namespace RadiatorStockAPI.Services
 
         // Helper: Log stock history
         private async Task LogStockHistoryAsync(
-            Guid radiatorId, 
-            string warehouseCode, 
-            int oldQuantity, 
-            int newQuantity, 
-            string changeType, 
-            Guid? updatedBy)
+    Guid radiatorId,
+    string warehouseCode,
+    int oldQuantity,
+    int newQuantity,
+    string changeType,
+    Guid? updatedBy,
+    Guid? saleId = null,
+    string? notes = null)
         {
-            // This would log to a StockHistory table if you have one
-            // For now, just log to console
-            _logger.LogInformation(
-                "Stock changed for radiator {RadiatorId} in warehouse {WarehouseCode}: {OldQty} -> {NewQty} ({ChangeType})",
-                radiatorId,
-                warehouseCode,
-                oldQuantity,
-                newQuantity,
-                changeType
-            );
-            
-            await Task.CompletedTask; // Placeholder for async pattern
+            try
+            {
+                var warehouse = await _warehouseService.GetWarehouseByCodeAsync(warehouseCode);
+                if (warehouse == null)
+                {
+                    _logger.LogWarning("Cannot log stock history: warehouse {WarehouseCode} not found", warehouseCode);
+                    return;
+                }
+
+                var quantityChange = newQuantity - oldQuantity;
+                var movementType = quantityChange >= 0 ? "INCOMING" : "OUTGOING";
+
+                var stockHistory = new StockHistory
+                {
+                    Id = Guid.NewGuid(),
+                    RadiatorId = radiatorId,
+                    WarehouseId = warehouse.Id,
+                    OldQuantity = oldQuantity,
+                    NewQuantity = newQuantity,
+                    QuantityChange = quantityChange,
+                    MovementType = movementType,
+                    ChangeType = changeType,
+                    SaleId = saleId,
+                    UpdatedBy = updatedBy,
+                    Notes = notes,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.StockHistories.Add(stockHistory);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "Stock history logged: {MovementType} for radiator {RadiatorId} in warehouse {WarehouseCode}: {OldQty} -> {NewQty}",
+                    movementType, radiatorId, warehouseCode, oldQuantity, newQuantity
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error logging stock history for radiator {RadiatorId}", radiatorId);
+            }
+        }
+
+
+        public async Task<IEnumerable<StockMovementDto>> GetStockMovementsAsync(
+    Guid? radiatorId = null,
+    string? warehouseCode = null,
+    DateTime? fromDate = null,
+    DateTime? toDate = null,
+    string? movementType = null,
+    int? limit = null)
+        {
+            var query = _context.StockHistories
+                .Include(sh => sh.Radiator)
+                .Include(sh => sh.Warehouse)
+                .Include(sh => sh.Sale)
+                    .ThenInclude(s => s.Customer)
+                .AsQueryable();
+
+            if (radiatorId.HasValue)
+                query = query.Where(sh => sh.RadiatorId == radiatorId.Value);
+
+            if (!string.IsNullOrEmpty(warehouseCode))
+            {
+                var warehouse = await _warehouseService.GetWarehouseByCodeAsync(warehouseCode);
+                if (warehouse != null)
+                    query = query.Where(sh => sh.WarehouseId == warehouse.Id);
+            }
+
+            if (fromDate.HasValue)
+                query = query.Where(sh => sh.CreatedAt >= fromDate.Value);
+
+            if (toDate.HasValue)
+                query = query.Where(sh => sh.CreatedAt <= toDate.Value);
+
+            if (!string.IsNullOrEmpty(movementType))
+                query = query.Where(sh => sh.MovementType == movementType.ToUpper());
+
+            query = query.OrderByDescending(sh => sh.CreatedAt);
+
+            if (limit.HasValue && limit.Value > 0)
+                query = query.Take(limit.Value);
+
+            var histories = await query.ToListAsync();
+
+            return histories.Select(sh => new StockMovementDto
+            {
+                Id = sh.Id,
+                Date = sh.CreatedAt,
+                RadiatorId = sh.RadiatorId,
+                ProductName = sh.Radiator.Name,
+                ProductCode = sh.Radiator.Code,
+                Brand = sh.Radiator.Brand,
+                WarehouseId = sh.WarehouseId,
+                WarehouseCode = sh.Warehouse.Code,
+                WarehouseName = sh.Warehouse.Name,
+                MovementType = sh.MovementType,
+                Quantity = Math.Abs(sh.QuantityChange),
+                OldQuantity = sh.OldQuantity,
+                NewQuantity = sh.NewQuantity,
+                ChangeType = sh.ChangeType,
+                Notes = sh.Notes,
+                SaleId = sh.SaleId,
+                SaleNumber = sh.Sale?.SaleNumber,
+                CustomerName = sh.Sale?.Customer != null
+                    ? $"{sh.Sale.Customer.FirstName} {sh.Sale.Customer.LastName}".Trim()
+                    : null
+            }).ToList();
         }
     }
 }

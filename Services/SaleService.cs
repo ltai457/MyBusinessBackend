@@ -12,7 +12,7 @@ namespace RadiatorStockAPI.Services
         private readonly IUserService _userService;
         private readonly ICustomerService _customerService;
 
-        public SalesService(RadiatorDbContext context, IStockService stockService, 
+        public SalesService(RadiatorDbContext context, IStockService stockService,
             IUserService userService, ICustomerService customerService)
         {
             _context = context;
@@ -24,7 +24,7 @@ namespace RadiatorStockAPI.Services
         public async Task<SaleResponseDto?> CreateSaleAsync(CreateSaleDto dto, Guid userId)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
-            
+
             try
             {
                 // Validate customer exists
@@ -36,8 +36,8 @@ namespace RadiatorStockAPI.Services
                 {
                     var stockDict = await _stockService.GetStockDictionaryAsync(item.RadiatorId);
                     var warehouse = await _context.Warehouses.FindAsync(item.WarehouseId);
-                    
-                    if (warehouse == null || !stockDict.ContainsKey(warehouse.Code) || 
+
+                    if (warehouse == null || !stockDict.ContainsKey(warehouse.Code) ||
                         stockDict[warehouse.Code] < item.Quantity)
                     {
                         return null; // Insufficient stock
@@ -79,15 +79,35 @@ namespace RadiatorStockAPI.Services
                     saleItems.Add(saleItem);
 
                     // Update stock levels
+                    // Update stock levels
                     var warehouse = await _context.Warehouses.FindAsync(itemDto.WarehouseId);
-                    var currentStock = await _stockService.GetStockDictionaryAsync(itemDto.RadiatorId);
-                    var newQuantity = currentStock[warehouse!.Code] - itemDto.Quantity;
-                    
-                    await _stockService.UpdateStockAsync(itemDto.RadiatorId, new UpdateStockDto
+                    var stockLevel = await _context.StockLevels
+                        .FirstOrDefaultAsync(sl =>
+                            sl.RadiatorId == itemDto.RadiatorId &&
+                            sl.WarehouseId == itemDto.WarehouseId);
+
+                    if (stockLevel != null)
                     {
-                        WarehouseCode = warehouse.Code,
-                        Quantity = newQuantity
-                    });
+                        int oldQuantity = stockLevel.Quantity;
+                        stockLevel.Quantity -= itemDto.Quantity;
+                        stockLevel.UpdatedAt = DateTime.UtcNow;
+
+                        // Log stock movement
+                        var stockHistory = new StockHistory
+                        {
+                            Id = Guid.NewGuid(),
+                            RadiatorId = itemDto.RadiatorId,
+                            WarehouseId = itemDto.WarehouseId,
+                            OldQuantity = oldQuantity,
+                            NewQuantity = stockLevel.Quantity,
+                            QuantityChange = -itemDto.Quantity,
+                            MovementType = "OUTGOING",
+                            ChangeType = "Sale",
+                            SaleId = sale.Id,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        _context.StockHistories.Add(stockHistory);
+                    }
                 }
 
                 // Calculate tax (15% GST for New Zealand)
@@ -100,7 +120,7 @@ namespace RadiatorStockAPI.Services
 
                 _context.Sales.Add(sale);
                 _context.SaleItems.AddRange(saleItems);
-                
+
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -231,7 +251,7 @@ namespace RadiatorStockAPI.Services
         public async Task<SaleResponseDto?> RefundSaleAsync(Guid id)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
-            
+
             try
             {
                 var sale = await _context.Sales
@@ -247,7 +267,7 @@ namespace RadiatorStockAPI.Services
                 {
                     var currentStock = await _stockService.GetStockDictionaryAsync(item.RadiatorId);
                     var newQuantity = currentStock[item.Warehouse.Code] + item.Quantity;
-                    
+
                     await _stockService.UpdateStockAsync(item.RadiatorId, new UpdateStockDto
                     {
                         WarehouseCode = item.Warehouse.Code,

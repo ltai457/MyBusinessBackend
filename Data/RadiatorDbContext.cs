@@ -21,6 +21,8 @@ namespace RadiatorStockAPI.Data
 
         public DbSet<RadiatorImage> RadiatorImages { get; set; }
 
+        public DbSet<StockHistory> StockHistories { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -170,6 +172,37 @@ namespace RadiatorStockAPI.Data
                     .WithMany()
                     .HasForeignKey(si => si.WarehouseId)
                     .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // Configure StockHistory
+            modelBuilder.Entity<StockHistory>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.MovementType).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.ChangeType).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.Notes).HasMaxLength(500);
+                entity.Property(e => e.CreatedAt).IsRequired();
+
+                entity.HasOne(e => e.Radiator)
+                    .WithMany()
+                    .HasForeignKey(e => e.RadiatorId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Warehouse)
+                    .WithMany()
+                    .HasForeignKey(e => e.WarehouseId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Sale)
+                    .WithMany()
+                    .HasForeignKey(e => e.SaleId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasIndex(e => e.RadiatorId);
+                entity.HasIndex(e => e.WarehouseId);
+                entity.HasIndex(e => e.CreatedAt);
+                entity.HasIndex(e => e.MovementType);
             });
         }
 
