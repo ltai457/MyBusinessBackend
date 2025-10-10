@@ -1,4 +1,4 @@
-using RadiatorStockAPI.DTOs;
+using RadiatorStockAPI.DTOs.Sales;
 
 namespace RadiatorStockAPI.Services
 {

@@ -1,7 +1,7 @@
 // Services/WarehouseService.cs - UPDATE YOUR EXISTING FILE
 using Microsoft.EntityFrameworkCore;
 using RadiatorStockAPI.Data;
-using RadiatorStockAPI.DTOs;
+using RadiatorStockAPI.DTOs.Warehouses;
 using RadiatorStockAPI.Models;
 
 namespace RadiatorStockAPI.Services

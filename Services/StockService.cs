@@ -2,7 +2,7 @@
 // COMPLETE FILE - OPTIMIZED VERSION
 using Microsoft.EntityFrameworkCore;
 using RadiatorStockAPI.Data;
-using RadiatorStockAPI.DTOs;
+using RadiatorStockAPI.DTOs.Stock;
 using RadiatorStockAPI.Models;
 
 namespace RadiatorStockAPI.Services

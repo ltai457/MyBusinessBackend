@@ -1,4 +1,4 @@
-using RadiatorStockAPI.DTOs;
+using RadiatorStockAPI.DTOs.Users;
 using RadiatorStockAPI.Models;
 
 namespace RadiatorStockAPI.Services

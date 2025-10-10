@@ -1,7 +1,7 @@
 // Services/RadiatorService.cs
 using Microsoft.EntityFrameworkCore;
 using RadiatorStockAPI.Data;
-using RadiatorStockAPI.DTOs;
+using RadiatorStockAPI.DTOs.Radiators;
 using RadiatorStockAPI.Models;
 
 namespace RadiatorStockAPI.Services

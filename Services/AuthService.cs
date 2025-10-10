@@ -7,7 +7,8 @@ using System.Security.Cryptography;
 using System.Text;
 using BCrypt.Net;
 using RadiatorStockAPI.Data;
-using RadiatorStockAPI.DTOs;
+using RadiatorStockAPI.DTOs.Auth;
+using RadiatorStockAPI.DTOs.Users;
 using RadiatorStockAPI.Models;
 
 namespace RadiatorStockAPI.Services
@@ -31,24 +32,24 @@ namespace RadiatorStockAPI.Services
             _logger = logger;
         }
 
-        public async Task<AuthResponseDto?> LoginAsync(LoginDto loginDto)
+        public async Task<AuthResponseDto?> LoginAsync(LoginRequestDto loginRequest)
         {
             try
             {
-                _logger.LogInformation("Login attempt for user: {Username}", loginDto.Username);
+                _logger.LogInformation("Login attempt for user: {Username}", loginRequest.Username);
 
                 var user = await _context.Users
-                    .FirstOrDefaultAsync(u => u.Username == loginDto.Username && u.IsActive);
+                    .FirstOrDefaultAsync(u => u.Username == loginRequest.Username && u.IsActive);
 
                 if (user == null)
                 {
-                    _logger.LogWarning("Login failed - user not found: {Username}", loginDto.Username);
+                    _logger.LogWarning("Login failed - user not found: {Username}", loginRequest.Username);
                     return null;
                 }
 
-                if (!BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
+                if (!BCrypt.Net.BCrypt.Verify(loginRequest.Password, user.PasswordHash))
                 {
-                    _logger.LogWarning("Login failed - invalid password for user: {Username}", loginDto.Username);
+                    _logger.LogWarning("Login failed - invalid password for user: {Username}", loginRequest.Username);
                     return null;
                 }
 
@@ -76,7 +77,7 @@ namespace RadiatorStockAPI.Services
                 _context.RefreshTokens.Add(refreshTokenEntity);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Login successful for user: {Username}", loginDto.Username);
+                _logger.LogInformation("Login successful for user: {Username}", loginRequest.Username);
 
                 var expirationMinutes = _configuration.GetValue<int>("JWT:AccessTokenExpirationMinutes", 15);
                 var expiresAt = DateTime.UtcNow.AddMinutes(expirationMinutes);
@@ -91,44 +92,44 @@ namespace RadiatorStockAPI.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during login for user: {Username}", loginDto.Username);
+                _logger.LogError(ex, "Error during login for user: {Username}", loginRequest.Username);
                 return null;
             }
         }
 
-        public async Task<AuthResponseDto?> RegisterAsync(RegisterDto registerDto)
+        public async Task<AuthResponseDto?> RegisterAsync(RegisterRequestDto registerRequest)
         {
             try
             {
-                _logger.LogInformation("Registration attempt for user: {Username}", registerDto.Username);
+                _logger.LogInformation("Registration attempt for user: {Username}", registerRequest.Username);
 
                 // Check if username exists
-                if (await _userService.UsernameExistsAsync(registerDto.Username))
+                if (await _userService.UsernameExistsAsync(registerRequest.Username))
                 {
-                    _logger.LogWarning("Registration failed - username exists: {Username}", registerDto.Username);
+                    _logger.LogWarning("Registration failed - username exists: {Username}", registerRequest.Username);
                     return null;
                 }
 
                 // Check if email exists
-                if (await _userService.EmailExistsAsync(registerDto.Email))
+                if (await _userService.EmailExistsAsync(registerRequest.Email))
                 {
-                    _logger.LogWarning("Registration failed - email exists: {Email}", registerDto.Email);
+                    _logger.LogWarning("Registration failed - email exists: {Email}", registerRequest.Email);
                     return null;
                 }
 
                 // Create user
                 var createUserDto = new CreateUserDto
                 {
-                    Username = registerDto.Username,
-                    Email = registerDto.Email,
-                    Password = registerDto.Password,
-                    Role = registerDto.Role
+                    Username = registerRequest.Username,
+                    Email = registerRequest.Email,
+                    Password = registerRequest.Password,
+                    Role = registerRequest.Role
                 };
 
                 var userDto = await _userService.CreateUserAsync(createUserDto);
                 if (userDto == null)
                 {
-                    _logger.LogError("Failed to create user: {Username}", registerDto.Username);
+                _logger.LogError("Failed to create user: {Username}", registerRequest.Username);
                     return null;
                 }
 
@@ -149,7 +150,7 @@ namespace RadiatorStockAPI.Services
                 _context.RefreshTokens.Add(refreshTokenEntity);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Registration successful for user: {Username}", registerDto.Username);
+                _logger.LogInformation("Registration successful for user: {Username}", registerRequest.Username);
 
                 var expirationMinutes = _configuration.GetValue<int>("JWT:AccessTokenExpirationMinutes", 15);
                 var expiresAt = DateTime.UtcNow.AddMinutes(expirationMinutes);
@@ -164,7 +165,7 @@ namespace RadiatorStockAPI.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during registration for user: {Username}", registerDto.Username);
+                _logger.LogError(ex, "Error during registration for user: {Username}", registerRequest.Username);
                 return null;
             }
         }
@@ -251,7 +252,7 @@ namespace RadiatorStockAPI.Services
             }
         }
 
-        public async Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordDto changePasswordDto)
+        public async Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordRequestDto changePasswordRequest)
         {
             try
             {
@@ -262,13 +263,13 @@ namespace RadiatorStockAPI.Services
                     return false;
                 }
 
-                if (!BCrypt.Net.BCrypt.Verify(changePasswordDto.CurrentPassword, user.PasswordHash))
+                if (!BCrypt.Net.BCrypt.Verify(changePasswordRequest.CurrentPassword, user.PasswordHash))
                 {
                     _logger.LogWarning("Password change failed - invalid current password for user: {UserId}", userId);
                     return false;
                 }
 
-                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(changePasswordDto.NewPassword);
+                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(changePasswordRequest.NewPassword);
                 user.UpdatedAt = DateTime.UtcNow;
 
                 // Revoke all existing refresh tokens to force re-login on all devices

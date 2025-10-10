@@ -3,7 +3,7 @@
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using RadiatorStockAPI.DTOs;
+using RadiatorStockAPI.DTOs.Users;
 using RadiatorStockAPI.Services;
 
 namespace RadiatorStockAPI.Controllers

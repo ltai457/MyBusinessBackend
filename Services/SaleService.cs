@@ -1,6 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using RadiatorStockAPI.Data;
-using RadiatorStockAPI.DTOs;
+using RadiatorStockAPI.DTOs.Stock;
+using RadiatorStockAPI.DTOs.Sales;
+using RadiatorStockAPI.DTOs.Customers;
+using RadiatorStockAPI.DTOs.Users;
+using RadiatorStockAPI.DTOs.Warehouses;
+using RadiatorStockAPI.DTOs.Radiators;
 using RadiatorStockAPI.Models;
 
 namespace RadiatorStockAPI.Services

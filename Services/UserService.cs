@@ -4,7 +4,7 @@
 using Microsoft.EntityFrameworkCore;
 using BCrypt.Net;
 using RadiatorStockAPI.Data;
-using RadiatorStockAPI.DTOs;
+using RadiatorStockAPI.DTOs.Users;
 using RadiatorStockAPI.Models;
 
 namespace RadiatorStockAPI.Services

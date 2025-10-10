@@ -1,5 +1,5 @@
 // Services/IWarehouseService.cs - UPDATE YOUR EXISTING FILE
-using RadiatorStockAPI.DTOs;
+using RadiatorStockAPI.DTOs.Warehouses;
 using RadiatorStockAPI.Models;
 
 namespace RadiatorStockAPI.Services
