@@ -7,8 +7,11 @@ using RadiatorStockAPI.DTOs.Users;
 using RadiatorStockAPI.DTOs.Warehouses;
 using RadiatorStockAPI.DTOs.Radiators;
 using RadiatorStockAPI.Models;
+using RadiatorStockAPI.Services.Customers;
+using RadiatorStockAPI.Services.Stock;
+using RadiatorStockAPI.Services.Users;
 
-namespace RadiatorStockAPI.Services
+namespace RadiatorStockAPI.Services.Sales
 {
     public class SalesService : ISalesService
     {

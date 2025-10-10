@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authorization; // ADD THIS LINE
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using RadiatorStockAPI.DTOs.Auth;
-using RadiatorStockAPI.Services;
+using RadiatorStockAPI.Services.Auth;
 
 namespace RadiatorStockAPI.Controllers
 {

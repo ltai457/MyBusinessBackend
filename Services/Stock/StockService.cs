@@ -4,8 +4,10 @@ using Microsoft.EntityFrameworkCore;
 using RadiatorStockAPI.Data;
 using RadiatorStockAPI.DTOs.Stock;
 using RadiatorStockAPI.Models;
+using RadiatorStockAPI.Services.Radiators;
+using RadiatorStockAPI.Services.Warehouses;
 
-namespace RadiatorStockAPI.Services
+namespace RadiatorStockAPI.Services.Stock
 {
     public class StockService : IStockService
     {

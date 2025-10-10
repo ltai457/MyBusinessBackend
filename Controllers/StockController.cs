@@ -1,7 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RadiatorStockAPI.DTOs.Stock;
-using RadiatorStockAPI.Services;
+using RadiatorStockAPI.Services.Radiators;
+using RadiatorStockAPI.Services.Stock;
 
 namespace RadiatorStockAPI.Controllers
 {

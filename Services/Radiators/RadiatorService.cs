@@ -3,8 +3,11 @@ using Microsoft.EntityFrameworkCore;
 using RadiatorStockAPI.Data;
 using RadiatorStockAPI.DTOs.Radiators;
 using RadiatorStockAPI.Models;
+using RadiatorStockAPI.Services.S3;
+using RadiatorStockAPI.Services.Stock;
+using RadiatorStockAPI.Services.Warehouses;
 
-namespace RadiatorStockAPI.Services
+namespace RadiatorStockAPI.Services.Radiators
 {
     public class RadiatorService : IRadiatorService
     {

@@ -4,7 +4,14 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 using RadiatorStockAPI.Data;
-using RadiatorStockAPI.Services;
+using RadiatorStockAPI.Services.Auth;
+using RadiatorStockAPI.Services.Customers;
+using RadiatorStockAPI.Services.Radiators;
+using RadiatorStockAPI.Services.S3;
+using RadiatorStockAPI.Services.Sales;
+using RadiatorStockAPI.Services.Stock;
+using RadiatorStockAPI.Services.Users;
+using RadiatorStockAPI.Services.Warehouses;
 using Amazon.S3;
 
 

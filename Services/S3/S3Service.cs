@@ -1,7 +1,8 @@
 using Amazon.S3;
 using Amazon.S3.Model;
+using Microsoft.AspNetCore.Http;
 
-namespace RadiatorStockAPI.Services
+namespace RadiatorStockAPI.Services.S3
 {
     public class S3Service : IS3Service
     {

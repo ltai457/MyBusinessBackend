@@ -7,7 +7,7 @@ using RadiatorStockAPI.Data;
 using RadiatorStockAPI.DTOs.Users;
 using RadiatorStockAPI.Models;
 
-namespace RadiatorStockAPI.Services
+namespace RadiatorStockAPI.Services.Users
 {
     public class UserService : IUserService
     {

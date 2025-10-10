@@ -4,7 +4,7 @@ using RadiatorStockAPI.Data;
 using RadiatorStockAPI.DTOs.Warehouses;
 using RadiatorStockAPI.Models;
 
-namespace RadiatorStockAPI.Services
+namespace RadiatorStockAPI.Services.Warehouses
 {
     public class WarehouseService : IWarehouseService
     {
