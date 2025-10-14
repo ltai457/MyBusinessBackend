@@ -14,4 +14,8 @@ public interface ISalesService
     Task<IEnumerable<SaleListDto>> GetSalesByDateRangeAsync(DateTime fromDate, DateTime toDate);
     Task<bool> SaleExistsAsync(Guid id);
     string GenerateSaleNumber();
+    Task<InvoiceResponseDto?> GenerateInvoiceAsync(GenerateInvoiceRequestDto dto, Guid userId);
+    Task<IEnumerable<InvoiceResponseDto>> GetAllInvoicesAsync();
+    Task<InvoiceResponseDto?> GetInvoiceByIdAsync(Guid id);
+    Task<InvoiceResponseDto?> GetInvoiceByNumberAsync(string invoiceNumber);
 }

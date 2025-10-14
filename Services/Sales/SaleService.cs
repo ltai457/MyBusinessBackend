@@ -331,5 +331,325 @@ namespace RadiatorStockAPI.Services.Sales
             var random = new Random().Next(100, 999);
             return $"RS{timestamp}{random}";
         }
+
+        public async Task<InvoiceResponseDto?> GenerateInvoiceAsync(GenerateInvoiceRequestDto dto, Guid userId)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                var userDto = await _userService.GetUserByIdAsync(userId);
+                if (userDto == null)
+                {
+                    return null;
+                }
+
+                if (dto.Items.Count == 0)
+                {
+                    return null;
+                }
+
+                var productItems = dto.Items.Where(i => i.RadiatorId.HasValue).ToList();
+
+                var radiatorIds = productItems
+                    .Select(i => i.RadiatorId!.Value)
+                    .Distinct()
+                    .ToList();
+
+                var warehouseIds = productItems
+                    .Select(i => i.WarehouseId)
+                    .Where(id => id.HasValue)
+                    .Select(id => id!.Value)
+                    .Distinct()
+                    .ToList();
+
+                var radiators = radiatorIds.Count > 0
+                    ? await _context.Radiators
+                        .Where(r => radiatorIds.Contains(r.Id))
+                        .ToDictionaryAsync(r => r.Id)
+                    : new Dictionary<Guid, Radiator>();
+
+                var warehouses = warehouseIds.Count > 0
+                    ? await _context.Warehouses
+                        .Where(w => warehouseIds.Contains(w.Id))
+                        .ToDictionaryAsync(w => w.Id)
+                    : new Dictionary<Guid, Warehouse>();
+
+                if (radiators.Count != radiatorIds.Count || warehouses.Count != warehouseIds.Count)
+                {
+                    return null;
+                }
+
+                // Calculate totals
+                decimal subTotal = 0m;
+                var taxRate = dto.TaxRate;
+
+                // Create Invoice entity
+                var invoice = new Invoice
+                {
+                    Id = Guid.NewGuid(),
+                    InvoiceNumber = GenerateInvoiceNumber(),
+                    UserId = userId,
+                    CustomerFullName = dto.Customer.FullName,
+                    CustomerEmail = dto.Customer.Email,
+                    CustomerPhone = dto.Customer.Phone,
+                    CustomerCompany = dto.Customer.Company,
+                    CustomerAddress = dto.Customer.Address,
+                    PaymentMethod = dto.PaymentMethod,
+                    Notes = dto.Notes,
+                    TaxRate = taxRate,
+                    Status = InvoiceStatus.Issued,
+                    IssueDate = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                var invoiceItems = new List<InvoiceItem>();
+                var invoiceItemDtos = new List<InvoiceItemDto>();
+
+                foreach (var item in dto.Items)
+                {
+                    if (item.RadiatorId.HasValue)
+                    {
+                        if (!item.WarehouseId.HasValue)
+                        {
+                            return null;
+                        }
+
+                        var radiator = radiators[item.RadiatorId.Value];
+                        var warehouse = warehouses[item.WarehouseId.Value];
+
+                        var unitPrice = item.UnitPrice ?? radiator.RetailPrice;
+                        var totalPrice = unitPrice * item.Quantity;
+                        subTotal += totalPrice;
+
+                        var invoiceItem = new InvoiceItem
+                        {
+                            Id = Guid.NewGuid(),
+                            InvoiceId = invoice.Id,
+                            RadiatorId = radiator.Id,
+                            WarehouseId = warehouse.Id,
+                            Description = item.Description?.Trim() ?? radiator.Name,
+                            RadiatorCode = radiator.Code,
+                            RadiatorName = radiator.Name,
+                            Brand = radiator.Brand,
+                            WarehouseCode = warehouse.Code,
+                            WarehouseName = warehouse.Name,
+                            IsCustomItem = false,
+                            Quantity = item.Quantity,
+                            UnitPrice = unitPrice,
+                            TotalPrice = totalPrice,
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        invoiceItems.Add(invoiceItem);
+
+                        invoiceItemDtos.Add(new InvoiceItemDto
+                        {
+                            RadiatorId = radiator.Id,
+                            RadiatorCode = radiator.Code,
+                            RadiatorName = radiator.Name,
+                            Brand = radiator.Brand,
+                            WarehouseId = warehouse.Id,
+                            WarehouseCode = warehouse.Code,
+                            WarehouseName = warehouse.Name,
+                            Description = item.Description?.Trim() ?? radiator.Name,
+                            IsCustomItem = false,
+                            Quantity = item.Quantity,
+                            UnitPrice = unitPrice,
+                            TotalPrice = totalPrice
+                        });
+                    }
+                    else
+                    {
+                        if (string.IsNullOrWhiteSpace(item.Description))
+                        {
+                            return null;
+                        }
+
+                        if (!item.UnitPrice.HasValue)
+                        {
+                            return null;
+                        }
+
+                        var unitPrice = item.UnitPrice.Value;
+                        var totalPrice = unitPrice * item.Quantity;
+                        subTotal += totalPrice;
+
+                        var invoiceItem = new InvoiceItem
+                        {
+                            Id = Guid.NewGuid(),
+                            InvoiceId = invoice.Id,
+                            RadiatorId = null,
+                            WarehouseId = null,
+                            Description = item.Description!.Trim(),
+                            RadiatorCode = null,
+                            RadiatorName = null,
+                            Brand = null,
+                            WarehouseCode = null,
+                            WarehouseName = null,
+                            IsCustomItem = true,
+                            Quantity = item.Quantity,
+                            UnitPrice = unitPrice,
+                            TotalPrice = totalPrice,
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        invoiceItems.Add(invoiceItem);
+
+                        invoiceItemDtos.Add(new InvoiceItemDto
+                        {
+                            RadiatorId = null,
+                            RadiatorCode = string.Empty,
+                            RadiatorName = string.Empty,
+                            Brand = string.Empty,
+                            WarehouseId = null,
+                            WarehouseCode = string.Empty,
+                            WarehouseName = string.Empty,
+                            Description = item.Description!.Trim(),
+                            IsCustomItem = true,
+                            Quantity = item.Quantity,
+                            UnitPrice = unitPrice,
+                            TotalPrice = totalPrice
+                        });
+                    }
+                }
+
+                var taxAmount = Math.Round(subTotal * taxRate, 2, MidpointRounding.AwayFromZero);
+                var totalAmount = subTotal + taxAmount;
+
+                invoice.SubTotal = subTotal;
+                invoice.TaxAmount = taxAmount;
+                invoice.TotalAmount = totalAmount;
+
+                // Save to database
+                _context.Invoices.Add(invoice);
+                _context.InvoiceItems.AddRange(invoiceItems);
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var response = new InvoiceResponseDto
+                {
+                    InvoiceNumber = invoice.InvoiceNumber,
+                    IssueDate = invoice.IssueDate,
+                    Customer = new InvoiceCustomerDto
+                    {
+                        FullName = dto.Customer.FullName,
+                        Email = dto.Customer.Email,
+                        Phone = dto.Customer.Phone,
+                        Company = dto.Customer.Company,
+                        Address = dto.Customer.Address
+                    },
+                    ProcessedBy = userDto,
+                    PaymentMethod = dto.PaymentMethod,
+                    Notes = dto.Notes,
+                    TaxRate = taxRate,
+                    SubTotal = subTotal,
+                    TaxAmount = taxAmount,
+                    TotalAmount = totalAmount,
+                    Items = invoiceItemDtos
+                };
+
+                return response;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        private static string GenerateInvoiceNumber()
+        {
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+            var random = new Random().Next(100, 999);
+            return $"INV{timestamp}{random}";
+        }
+
+        public async Task<IEnumerable<InvoiceResponseDto>> GetAllInvoicesAsync()
+        {
+            var invoices = await _context.Invoices
+                .Include(i => i.CreatedBy)
+                .Include(i => i.InvoiceItems)
+                    .ThenInclude(ii => ii.Radiator)
+                .Include(i => i.InvoiceItems)
+                    .ThenInclude(ii => ii.Warehouse)
+                .OrderByDescending(i => i.IssueDate)
+                .ToListAsync();
+
+            return invoices.Select(MapInvoiceToDto);
+        }
+
+        public async Task<InvoiceResponseDto?> GetInvoiceByIdAsync(Guid id)
+        {
+            var invoice = await _context.Invoices
+                .Include(i => i.CreatedBy)
+                .Include(i => i.InvoiceItems)
+                    .ThenInclude(ii => ii.Radiator)
+                .Include(i => i.InvoiceItems)
+                    .ThenInclude(ii => ii.Warehouse)
+                .FirstOrDefaultAsync(i => i.Id == id);
+
+            if (invoice == null)
+                return null;
+
+            return MapInvoiceToDto(invoice);
+        }
+
+        public async Task<InvoiceResponseDto?> GetInvoiceByNumberAsync(string invoiceNumber)
+        {
+            var invoice = await _context.Invoices
+                .Include(i => i.CreatedBy)
+                .Include(i => i.InvoiceItems)
+                    .ThenInclude(ii => ii.Radiator)
+                .Include(i => i.InvoiceItems)
+                    .ThenInclude(ii => ii.Warehouse)
+                .FirstOrDefaultAsync(i => i.InvoiceNumber == invoiceNumber);
+
+            if (invoice == null)
+                return null;
+
+            return MapInvoiceToDto(invoice);
+        }
+
+        private InvoiceResponseDto MapInvoiceToDto(Invoice invoice)
+        {
+            var userDto = _userService.GetUserDtoAsync(invoice.CreatedBy).Result;
+
+            return new InvoiceResponseDto
+            {
+                InvoiceNumber = invoice.InvoiceNumber,
+                IssueDate = invoice.IssueDate,
+                Customer = new InvoiceCustomerDto
+                {
+                    FullName = invoice.CustomerFullName,
+                    Email = invoice.CustomerEmail,
+                    Phone = invoice.CustomerPhone,
+                    Company = invoice.CustomerCompany,
+                    Address = invoice.CustomerAddress
+                },
+                ProcessedBy = userDto!,
+                PaymentMethod = invoice.PaymentMethod,
+                Notes = invoice.Notes,
+                TaxRate = invoice.TaxRate,
+                SubTotal = invoice.SubTotal,
+                TaxAmount = invoice.TaxAmount,
+                TotalAmount = invoice.TotalAmount,
+                Items = invoice.InvoiceItems.Select(ii => new InvoiceItemDto
+                {
+                    RadiatorId = ii.RadiatorId,
+                    RadiatorCode = ii.RadiatorCode ?? string.Empty,
+                    RadiatorName = ii.RadiatorName ?? string.Empty,
+                    Brand = ii.Brand ?? string.Empty,
+                    WarehouseId = ii.WarehouseId,
+                    WarehouseCode = ii.WarehouseCode ?? string.Empty,
+                    WarehouseName = ii.WarehouseName ?? string.Empty,
+                    Description = ii.Description,
+                    IsCustomItem = ii.IsCustomItem,
+                    Quantity = ii.Quantity,
+                    UnitPrice = ii.UnitPrice,
+                    TotalPrice = ii.TotalPrice
+                }).ToList()
+            };
+        }
     }
 }

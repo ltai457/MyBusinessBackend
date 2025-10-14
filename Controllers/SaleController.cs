@@ -100,5 +100,55 @@ namespace RadiatorStockAPI.Controllers
 
             return Ok(refunded);
         }
+
+        [HttpPost("invoice")]
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<ActionResult<InvoiceResponseDto>> GenerateInvoice([FromBody] GenerateInvoiceRequestDto dto)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            {
+                return Unauthorized(new { message = "Unable to determine current user." });
+            }
+
+            var invoice = await _salesService.GenerateInvoiceAsync(dto, userId);
+            if (invoice == null)
+            {
+                return BadRequest(new { message = "Unable to generate invoice. Verify radiator and warehouse selections." });
+            }
+
+            return CreatedAtAction(nameof(GetInvoiceByNumber), new { invoiceNumber = invoice.InvoiceNumber }, invoice);
+        }
+
+        [HttpGet("invoices")]
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<ActionResult<IEnumerable<InvoiceResponseDto>>> GetAllInvoices()
+        {
+            var invoices = await _salesService.GetAllInvoicesAsync();
+            return Ok(invoices);
+        }
+
+        [HttpGet("invoices/{id:guid}")]
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<ActionResult<InvoiceResponseDto>> GetInvoiceById(Guid id)
+        {
+            var invoice = await _salesService.GetInvoiceByIdAsync(id);
+            if (invoice == null)
+                return NotFound(new { message = $"Invoice with ID {id} not found." });
+
+            return Ok(invoice);
+        }
+
+        [HttpGet("invoices/number/{invoiceNumber}")]
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<ActionResult<InvoiceResponseDto>> GetInvoiceByNumber(string invoiceNumber)
+        {
+            var invoice = await _salesService.GetInvoiceByNumberAsync(invoiceNumber);
+            if (invoice == null)
+                return NotFound(new { message = $"Invoice with number {invoiceNumber} not found." });
+
+            return Ok(invoice);
+        }
     }
 }

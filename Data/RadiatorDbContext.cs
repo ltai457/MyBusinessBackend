@@ -18,6 +18,8 @@ namespace RadiatorStockAPI.Data
         public DbSet<Customer> Customers { get; set; }
         public DbSet<Sale> Sales { get; set; }
         public DbSet<SaleItem> SaleItems { get; set; }
+        public DbSet<Invoice> Invoices { get; set; }
+        public DbSet<InvoiceItem> InvoiceItems { get; set; }
 
         public DbSet<RadiatorImage> RadiatorImages { get; set; }
 
@@ -203,6 +205,63 @@ namespace RadiatorStockAPI.Data
                 entity.HasIndex(e => e.WarehouseId);
                 entity.HasIndex(e => e.CreatedAt);
                 entity.HasIndex(e => e.MovementType);
+            });
+
+            // Configure Invoice
+            modelBuilder.Entity<Invoice>(entity =>
+            {
+                entity.HasKey(i => i.Id);
+                entity.Property(i => i.InvoiceNumber).IsRequired().HasMaxLength(50);
+                entity.Property(i => i.CustomerFullName).IsRequired().HasMaxLength(150);
+                entity.Property(i => i.CustomerEmail).HasMaxLength(150);
+                entity.Property(i => i.CustomerPhone).HasMaxLength(30);
+                entity.Property(i => i.CustomerCompany).HasMaxLength(200);
+                entity.Property(i => i.CustomerAddress).HasMaxLength(300);
+                entity.Property(i => i.SubTotal).HasPrecision(18, 2);
+                entity.Property(i => i.TaxRate).HasPrecision(5, 4);
+                entity.Property(i => i.TaxAmount).HasPrecision(18, 2);
+                entity.Property(i => i.TotalAmount).HasPrecision(18, 2);
+                entity.Property(i => i.PaymentMethod).IsRequired().HasMaxLength(20);
+                entity.Property(i => i.Notes).HasMaxLength(500);
+                entity.Property(i => i.Status).HasConversion<int>();
+
+                entity.HasIndex(i => i.InvoiceNumber).IsUnique();
+                entity.HasIndex(i => i.IssueDate);
+                entity.HasIndex(i => i.Status);
+
+                entity.HasOne(i => i.CreatedBy)
+                    .WithMany()
+                    .HasForeignKey(i => i.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // Configure InvoiceItem
+            modelBuilder.Entity<InvoiceItem>(entity =>
+            {
+                entity.HasKey(ii => ii.Id);
+                entity.Property(ii => ii.Description).IsRequired().HasMaxLength(500);
+                entity.Property(ii => ii.RadiatorCode).HasMaxLength(100);
+                entity.Property(ii => ii.RadiatorName).HasMaxLength(200);
+                entity.Property(ii => ii.Brand).HasMaxLength(100);
+                entity.Property(ii => ii.WarehouseCode).HasMaxLength(50);
+                entity.Property(ii => ii.WarehouseName).HasMaxLength(200);
+                entity.Property(ii => ii.UnitPrice).HasPrecision(18, 2);
+                entity.Property(ii => ii.TotalPrice).HasPrecision(18, 2);
+
+                entity.HasOne(ii => ii.Invoice)
+                    .WithMany(i => i.InvoiceItems)
+                    .HasForeignKey(ii => ii.InvoiceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(ii => ii.Radiator)
+                    .WithMany()
+                    .HasForeignKey(ii => ii.RadiatorId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(ii => ii.Warehouse)
+                    .WithMany()
+                    .HasForeignKey(ii => ii.WarehouseId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
         }
 
